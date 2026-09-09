@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Venue Simulator - Hard Mode</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="command-bar">
+      <div class="identity">
+        <span class="eyebrow">Indoor Venue Ops</span>
+        <h1>Venue Simulator <strong>Hard Mode</strong></h1>
+      </div>
+      <div class="clock-stack">
+        <span class="eyebrow">Sim Time</span>
+        <div id="simClock" class="sim-clock">08:00</div>
+      </div>
+      <section class="speed-panel" aria-label="Simulation speed">
+        <span class="eyebrow">Simulation Speed</span>
+        <div id="speedButtons" class="segmented"></div>
+      </section>
+    </header>
+
+    <section class="phase-rail panel">
+      <div class="phase-summary">
+        <span class="eyebrow">Lifecycle</span>
+        <div>
+          <strong id="currentPhase">DARK</strong>
+          <span id="timelineStatus" class="pill on-time">ON TIME</span>
+        </div>
+        <span id="phaseEta" class="microcopy">Next: LOAD-IN at 09:00</span>
+      </div>
+      <div id="phaseTrack" class="phase-track"></div>
+      <div class="phase-actions">
+        <button id="advancePhase" type="button">Advance Phase</button>
+        <button id="delayDoors" type="button">Delay Doors +5m</button>
+        <button id="generateReport" type="button">Post-Event Report</button>
+      </div>
+    </section>
+
+    <section class="kpi-grid">
+      <article class="kpi panel">
+        <span class="eyebrow">Attendance</span>
+        <strong id="attendanceKpi">0 / 8,500</strong>
+        <span id="densityKpi" class="microcopy">Building dark</span>
+      </article>
+      <article class="kpi panel">
+        <span class="eyebrow">Queue</span>
+        <strong id="queueKpi">0</strong>
+        <span id="waitKpi" class="microcopy">Entry wait 0m</span>
+      </article>
+      <article class="kpi panel">
+        <span class="eyebrow">Power</span>
+        <strong id="powerKpi">142 kW</strong>
+        <span id="powerWarnKpi" class="microcopy">Normal</span>
+      </article>
+      <article class="kpi panel">
+        <span class="eyebrow">Weather</span>
+        <strong id="weatherKpi">58°F</strong>
+        <span id="weatherWarnKpi" class="microcopy">Dry, light wind</span>
+      </article>
+      <article class="kpi panel">
+        <span class="eyebrow">Money</span>
+        <strong id="profitKpi">$0</strong>
+        <span id="moneyKpi" class="microcopy">Revenue $0</span>
+      </article>
+      <article class="kpi panel">
+        <span class="eyebrow">Incidents</span>
+        <strong id="incidentKpi">0 Open</strong>
+        <span id="criticalKpi" class="microcopy">No criticals</span>
+      </article>
+    </section>
+
+    <section class="ops-grid">
+      <article class="panel venue-panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Actual Venue</span>
+            <h2>Schematic Floor Plan</h2>
+          </div>
+          <span id="selectedRoomPill" class="pill">FOH selected</span>
+        </div>
+        <div class="map-tutorial">
+          <div>
+            <strong>Operator Brief</strong>
+            <span>Send crew in, watch staff intake split by department, then let phases auto-advance.</span>
+          </div>
+          <div>
+            <strong>Map Read</strong>
+            <span>Guests use doors, hallways, concessions, restrooms, seats, and exit banks before disappearing into counts.</span>
+          </div>
+          <div>
+            <strong>What Bites</strong>
+            <span>Bad guests, queues, weather, power, network, staffing, and concessions can cascade into incidents.</span>
+          </div>
+        </div>
+        <div class="map-actions">
+          <button id="sendCrewIn" type="button">Send Crew In</button>
+          <button id="openDock" type="button">Open Dock Doors</button>
+          <button id="callForklift" type="button">Call Forklift</button>
+          <button id="crewBreak" type="button">Call Crew Break</button>
+        </div>
+        <div class="venue-map" id="venueMap" aria-label="Selectable venue schematic"></div>
+        <div class="legend">
+          <span><i class="zone-chip arena"></i>Arena Bowl</span>
+          <span><i class="zone-chip public"></i>Public</span>
+          <span><i class="zone-chip boh"></i>Back of House</span>
+          <span><i class="zone-chip ops"></i>Operations</span>
+          <span><i class="dot low"></i>Low</span>
+          <span><i class="dot moderate"></i>Moderate</span>
+          <span><i class="dot high"></i>High</span>
+          <span><i class="dot overcapacity"></i>Overcapacity</span>
+          <span><i class="dot incident"></i>Incident</span>
+          <span><i class="staff-chip staff-security"></i>Security</span>
+          <span><i class="staff-chip staff-stagehands"></i>Stagehands</span>
+          <span><i class="staff-chip staff-it"></i>IT</span>
+          <span><i class="staff-chip staff-catering"></i>Catering</span>
+        </div>
+      </article>
+
+      <aside class="panel inspector">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Live Detail Inspector</span>
+            <h2 id="roomTitle">FOH</h2>
+          </div>
+          <span id="roomDensity" class="pill">LOW</span>
+        </div>
+        <div id="roomInspector" class="inspector-grid"></div>
+      </aside>
+    </section>
+
+    <section class="systems-grid">
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Crowd Simulation</span>
+            <h2>Pipeline</h2>
+          </div>
+          <button id="addSecurityLane" type="button">Open Security Lane</button>
+        </div>
+        <div id="admissionsPanel" class="admissions-panel"></div>
+        <div class="admissions-controls">
+          <div id="admissionsButtons" class="segmented small"></div>
+          <label class="inline-control"><span>Meter</span><input id="admissionsMeter" type="number" min="20" max="320" step="10" value="120"></label>
+          <button id="capacityOverride" type="button">Override Capacity</button>
+        </div>
+        <div id="crowdPipeline" class="pipeline"></div>
+        <div id="crowdRates" class="subgrid"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Staffing</span>
+            <h2>Coverage</h2>
+          </div>
+          <button id="calloutStaff" type="button">Random Callout</button>
+        </div>
+        <div id="setupPanel" class="setup-panel"></div>
+        <div id="scenarioButtons" class="scenario-buttons"></div>
+        <div id="staffTable" class="data-table"></div>
+        <div class="button-row">
+          <button data-reassign="Security:Guest Services" type="button">Security → Guest</button>
+          <button data-reassign="Guest Services:Security" type="button">Guest → Security</button>
+          <button data-reassign="Stagehands:Production" type="button">Stagehand → Production</button>
+          <button data-reassign="IT:POS" type="button">IT → POS</button>
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">NPC Work</span>
+            <h2>Crew / Band / Active Fixes</h2>
+          </div>
+          <span id="bandPill" class="pill">Band offsite</span>
+        </div>
+        <div id="npcPanel" class="npc-panel"></div>
+      </article>
+
+      <article class="panel wide">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Three-Phase Electrical</span>
+            <h2>Utilities, Panels, Backup Power</h2>
+          </div>
+          <div class="button-row tight">
+            <button id="shedLobbyLights" type="button">Shed Lobby Lights</button>
+            <button id="addLightingLoad" type="button">Add Lighting Load</button>
+            <button id="forceUtilityFail" type="button">Fail Utility A</button>
+            <button id="startGenerators" type="button">Start Generators</button>
+          </div>
+        </div>
+        <div class="power-layout">
+          <div id="utilityGrid" class="subgrid"></div>
+          <div id="panelGrid" class="panel-grid"></div>
+          <div id="backupGrid" class="subgrid"></div>
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Network Simulation</span>
+            <h2>Topology</h2>
+          </div>
+          <button id="failCoreA" type="button">Fail CORE-SW-A</button>
+        </div>
+        <div class="network-wrap">
+          <div id="networkTopo" class="network-topology"></div>
+          <div id="networkStats" class="data-table compact"></div>
+        </div>
+      </article>
+
+      <article class="panel wide production">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Production System</span>
+            <h2>Audio / Lighting / Video / Stage</h2>
+          </div>
+          <div id="productionTabs" class="segmented small"></div>
+        </div>
+        <div id="productionPanel"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">HVAC</span>
+            <h2>Air Handlers</h2>
+          </div>
+          <button id="failAhu" type="button">Fail AHU</button>
+        </div>
+        <div id="hvacGrid" class="subgrid"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">External Conditions</span>
+            <h2>Weather</h2>
+          </div>
+          <button id="stormButton" type="button">Summon Storm</button>
+        </div>
+        <div id="weatherPanel" class="weather-panel"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Concessions</span>
+            <h2>Queues + Inventory</h2>
+          </div>
+          <button id="openConcession" type="button">Open Stand</button>
+        </div>
+        <div id="concessionPanel" class="subgrid"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Dispatch</span>
+            <h2>Radio Feed</h2>
+          </div>
+          <div class="button-row tight">
+            <button data-dispatch="Security" type="button">Security</button>
+            <button data-dispatch="Medical" type="button">Medical</button>
+            <button data-dispatch="IT" type="button">IT</button>
+            <button data-dispatch="Stagehands" type="button">Stage</button>
+          </div>
+        </div>
+        <ol id="dispatchFeed" class="feed"></ol>
+      </article>
+
+      <article class="panel wide">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Incident System</span>
+            <h2>Open Incidents + History</h2>
+          </div>
+          <button id="spawnIncident" type="button">Trigger Incident</button>
+        </div>
+        <div id="incidentPanel" class="incident-panel"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Money</span>
+            <h2>Operating P&L</h2>
+          </div>
+        </div>
+        <div id="moneyPanel" class="money-panel"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Event Score</span>
+            <h2>Post-Event</h2>
+          </div>
+        </div>
+        <div id="scorePanel" class="score-panel"></div>
+      </article>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
