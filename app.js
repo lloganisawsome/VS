@@ -26,6 +26,7 @@ const els = {
   incidentKpi: $("#incidentKpi"),
   criticalKpi: $("#criticalKpi"),
   venueMap: $("#venueMap"),
+  actorFilterButtons: $("#actorFilterButtons"),
   sendCrewIn: $("#sendCrewIn"),
   openDock: $("#openDock"),
   callForklift: $("#callForklift"),
@@ -69,7 +70,11 @@ const els = {
   incidentPanel: $("#incidentPanel"),
   spawnIncident: $("#spawnIncident"),
   moneyPanel: $("#moneyPanel"),
-  scorePanel: $("#scorePanel")
+  scorePanel: $("#scorePanel"),
+  debugUnlock: $("#debugUnlock"),
+  debugPanel: $("#debugPanel"),
+  debugStatus: $("#debugStatus"),
+  debugPhaseSelect: $("#debugPhaseSelect")
 };
 
 const capacity = 8500;
@@ -82,6 +87,7 @@ const scheduledStarts = [0, 60, 120, 240, 330, 390, 450, 480, 600, 630, 690, 780
 const speeds = [0, 1, 5, 20, 60];
 const admissionsModes = ["OPEN", "METERED", "PAUSED", "CLOSED"];
 const difficultyModes = ["SANDBOX", "HARD"];
+const actorFilters = ["ALL", "GUESTS", "WORKERS"];
 const staffRates = {
   Security: 31,
   Ushers: 24,
@@ -104,6 +110,7 @@ const state = {
   timelineStatus: "ON TIME",
   selectedRoomId: "foh",
   selectedProduction: "AUDIO",
+  actorFilter: "ALL",
   securityLanes: 6,
   difficulty: "SANDBOX",
   scenario: "Normal Concert",
@@ -186,6 +193,18 @@ const state = {
   ],
   nextIncidentId: 184,
   reportGenerated: false,
+  debugUnlocked: (() => {
+    try {
+      return localStorage.getItem("venueDebugUnlocked") === "1" || /debug=1/i.test(location.search) || /debug/i.test(location.hash);
+    } catch {
+      return /debug=1/i.test(location.search) || /debug/i.test(location.hash);
+    }
+  })(),
+  eventDay: 1,
+  closingMode: false,
+  closeoutProgress: 0,
+  nextDayReady: false,
+  nextDayScenario: null,
   peakAttendance: 0,
   totalWaitMinutes: 0,
   waitSamples: 1,
@@ -289,13 +308,90 @@ const rooms = [
   { id: "foh", name: "FOH", group: "Operations", x: 42, y: 54, w: 8, h: 8, cap: 24, baseTemp: 70, power: 18, net: "OK", access: "Crew", equipment: ["Audio console", "Lighting console", "Video control"] }
 ];
 
+applyReferenceVenueLayout();
+
+function applyReferenceVenueLayout() {
+  const layout = {
+    greenRoom: { x: 2.4, y: 3.3, w: 8.5, h: 7.2 },
+    dressing1: { x: 11.6, y: 3.3, w: 8.4, h: 7.2 },
+    dressing2: { x: 20.8, y: 3.3, w: 8.4, h: 7.2 },
+    prodOffice: { x: 30, y: 3.3, w: 8.8, h: 7.2 },
+    catering: { x: 39.6, y: 3.3, w: 10.1, h: 7.2 },
+    securityOffice: { x: 50.5, y: 3.3, w: 8.8, h: 7.2 },
+    medical: { x: 60.1, y: 3.3, w: 8.4, h: 7.2 },
+    storage: { x: 69.3, y: 3.3, w: 9.2, h: 7.2 },
+    riggingLoft: { x: 79.3, y: 3.3, w: 9.3, h: 7.2 },
+    merch: { x: 2.5, y: 15.2, w: 8.1, h: 6.8 },
+    boxOffice: { x: 2.5, y: 22.8, w: 8.1, h: 6.8 },
+    vipEntry: { x: 2.5, y: 30.4, w: 8.1, h: 6.8 },
+    securityLanes: { x: 2.5, y: 38, w: 8.1, h: 6.8 },
+    mainLobby: { x: 2.5, y: 45.6, w: 8.1, h: 29.8 },
+    westConcourse: { x: 17.1, y: 36.4, w: 6.9, h: 25.6 },
+    northConcourse: { x: 44.4, y: 16.6, w: 12.2, h: 5.1 },
+    southConcourse: { x: 44.4, y: 72.8, w: 12.2, h: 5.1 },
+    eastConcourse: { x: 82.3, y: 36.4, w: 5.1, h: 25.6 },
+    restroomsA: { name: "Restrooms NW", x: 14.7, y: 17.4, w: 11.2, h: 6.6 },
+    restroomsB: { name: "Restrooms NE", x: 76.7, y: 17.4, w: 10.4, h: 6.6 },
+    restroomsC: { name: "Restrooms SW", x: 14.7, y: 70.8, w: 11.2, h: 6.6 },
+    restroomsD: { name: "Restrooms SE", x: 76.7, y: 70.8, w: 10.4, h: 6.6 },
+    lowerBowl: { x: 25.4, y: 22.7, w: 40.2, h: 12.7 },
+    upperBowl: { x: 25.4, y: 63.2, w: 40.2, h: 12.7 },
+    floor: { x: 33.4, y: 38.6, w: 30.2, h: 19.5 },
+    vomNorth: { x: 39.2, y: 31.4, w: 21.2, h: 3.2 },
+    vomSouth: { x: 39.2, y: 65.7, w: 21.2, h: 3.2 },
+    stage: { x: 70.2, y: 34.3, w: 12.1, h: 28.4 },
+    stageLeft: { x: 82.7, y: 31.2, w: 5.5, h: 9.8 },
+    stageRight: { x: 82.7, y: 58.3, w: 5.5, h: 9.8 },
+    concessionsA: { x: 91, y: 15.8, w: 6.8, h: 7.1 },
+    concessionsB: { x: 91, y: 24.3, w: 6.8, h: 7.1 },
+    concessionsC: { x: 91, y: 32.8, w: 6.8, h: 7.1 },
+    mainElectrical: { x: 91, y: 48.2, w: 6.8, h: 8.2 },
+    idfA: { x: 91, y: 57.7, w: 6.8, h: 6.1 },
+    hvacPlant: { x: 91, y: 65, w: 6.8, h: 7.1 },
+    generatorYard: { x: 91, y: 73.4, w: 6.8, h: 7.1 },
+    mdf: { x: 86.2, y: 22.9, w: 3.6, h: 5.5 },
+    idfB: { x: 86.2, y: 70.5, w: 3.6, h: 5.5 },
+    serviceTunnel: { name: "Backstage Hall", x: 88.2, y: 29.2, w: 1.8, h: 38 },
+    westExit: { x: 1.3, y: 83.7, w: 7.1, h: 9.3 },
+    eastExit: { x: 91.9, y: 83.7, w: 6.4, h: 9.3 },
+    busBay: { x: 10.6, y: 84.5, w: 22.3, h: 9.1 },
+    loadingDock: { x: 36.2, y: 84.5, w: 28.1, h: 9.1 },
+    truckLot: { name: "Service Road", x: 2.1, y: 94.4, w: 95.8, h: 4.3 },
+    freightElevator: { x: 33.5, y: 84.5, w: 2.1, h: 9.1 },
+    northGarage: { name: "West Exit Ramp", x: 1.3, y: 80.4, w: 7.1, h: 3.1 },
+    southGarage: { name: "East Exit Ramp", x: 91.9, y: 80.4, w: 6.4, h: 3.1 },
+    foh: { x: 45.1, y: 51.6, w: 7.4, h: 6.2 }
+  };
+
+  rooms.forEach((room) => {
+    if (layout[room.id]) Object.assign(room, layout[room.id]);
+  });
+  rooms.push({ id: "concessionsD", name: "Concessions D", group: "Public", x: 91, y: 41.3, w: 6.8, h: 7.1, cap: 140, baseTemp: 70, power: 42, net: "OK", access: "Public", equipment: ["POS", "Warmers", "Coolers"] });
+}
+
 const roomRuntime = new Map(rooms.map((room) => [room.id, {
   occupancy: 0,
   temp: room.baseTemp,
   incidents: [],
   network: "OK",
-  power: room.power
+  power: room.power,
+  resources: resourceDefaultsFor(room)
 }]));
+
+function resourceDefaultsFor(room) {
+  return {
+    cleanliness: room.group === "Public" ? 92 : 96,
+    freshwater: room.name.includes("Restrooms") || room.name.includes("Concessions") ? 100 : null,
+    wastewater: room.name.includes("Restrooms") || room.name.includes("Concessions") ? 0 : null,
+    fixtures: room.name.includes("Restrooms") ? 100 : null,
+    refrigeration: room.name.includes("Concessions") || room.id === "catering" ? 98 : null,
+    satisfaction: room.group === "Public" ? 86 : null,
+    dockAvailability: room.id === "loadingDock" ? 100 : null,
+    casesWaiting: room.id === "loadingDock" ? 0 : null,
+    panelTemp: room.id === "mainElectrical" ? 86 : null,
+    treatmentSpaces: room.id === "medical" ? 4 : null
+  };
+}
 
 const staff = {
   Security: { scheduled: 52, checkedIn: 47, assigned: 44 },
@@ -381,6 +477,13 @@ let renderAccumulator = 0;
 let uiRenderAccumulator = 0;
 let incidentAccumulator = 0;
 let dispatchAccumulator = 0;
+let incidentRenderSignature = "";
+let incidentScrollLockedUntil = 0;
+let incidentScrollTop = 0;
+let mapStaticSignature = "";
+let debugUnlockBuffer = "";
+let debugUnlockClicks = 0;
+let debugUnlockClickAt = 0;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -494,6 +597,29 @@ function incidentDetail(category, title, source) {
   if (lower.includes("capacity")) {
     return `Admissions is at ${((state.admissions.inside / capacity) * 100).toFixed(1)}% of legal capacity. Scanners are interlocked unless override is on; excess ticket holders should be metered or turned away.`;
   }
+  if (lower.includes("freshwater") || lower.includes("fixtures")) {
+    return `Water pressure is dropping in ${source}. Restroom fixtures will fall offline and concession sinks may be limited until facility opens the valve and verifies pressure.`;
+  }
+  if (lower.includes("cleanliness") || lower.includes("spill")) {
+    return `${source} is degrading from trash, wet floor risk, or crowd wear. Custodial needs cones, mop kit, liners, and a clear lane to reopen the space.`;
+  }
+  if (lower.includes("freshwater") || lower.includes("fixtures")) {
+    return {
+      why: "Fixture demand pulled water pressure below the operating threshold or a valve/actuator is stuck.",
+      impact: "Restroom fixtures drop offline, concession hand sinks may be limited, and guest satisfaction falls.",
+      fix: "Send facility with valve key, open/verify pressure, flush the line, and test fixtures before reopening."
+    };
+  }
+  if (lower.includes("cleanliness") || lower.includes("spill")) {
+    return {
+      why: "Public-area traffic, spills, or trash exceeded custodial recovery speed.",
+      impact: "Guests slow around the area, slip risk rises, and concourse/lobby satisfaction drops.",
+      fix: "Cone off the area, send custodial with supplies, clean and dry the floor, then reopen flow."
+    };
+  }
+  if (lower.includes("refrigeration")) {
+    return `Cold-hold margin is dropping at ${source}. Facility needs to verify compressor power, reset refrigeration, and move inventory before product is lost.`;
+  }
   if (lower.includes("concessions")) {
     return `The stand queue is growing faster than service capacity. Open stands: ${concessions.openStands}; waiting guests: ${fmtNumber(concessions.waiting)}. POS and line control are the fastest fixes.`;
   }
@@ -520,6 +646,9 @@ function incidentSteps(category, title) {
   if (lower.includes("disorderly") || lower.includes("guest escort")) return ["Contact guest", "Separate from crowd", "Escort to exit", "Backfill area"];
   if (lower.includes("queue")) return ["Open lane", "Move stanchions", "Assign screeners", "Watch wait time"];
   if (lower.includes("capacity")) return ["Freeze scan", "Verify count", "Meter doors", "Turn away excess"];
+  if (lower.includes("freshwater") || lower.includes("fixtures")) return ["Find valve", "Open water", "Flush lines", "Test fixtures"];
+  if (lower.includes("cleanliness") || lower.includes("spill")) return ["Cone area", "Get mop kit", "Clean floor", "Reopen flow"];
+  if (lower.includes("refrigeration")) return ["Check power", "Reset compressor", "Move cold stock", "Verify temp"];
   if (lower.includes("concessions")) return ["Send POS staff", "Open stand", "Restock counter", "Split line"];
   if (lower.includes("ahu") || category === "HVAC") return ["Grab tool kit", "Open chilled-water valve", "Reset AHU", "Verify supply temp"];
   if (lower.includes("panel") || lower.includes("phase") || category === "Electrical") return ["Meter phases", "Shed load", "Rebalance circuits", "Thermal check"];
@@ -652,6 +781,9 @@ function updateWorkOrders(dt) {
 function repairNeedForIncident(incident) {
   const lower = incident.title.toLowerCase();
   if (lower.includes("freight elevator")) return { tool: "Electrical Kit", part: "Door Interlock" };
+  if (lower.includes("freshwater") || lower.includes("fixtures")) return { tool: "Valve Key", part: "Valve Actuator" };
+  if (lower.includes("cleanliness") || lower.includes("spill")) return { tool: "Custodial Cart", part: "Mop Kit" };
+  if (lower.includes("refrigeration")) return { tool: "Refrigeration Kit", part: "Valve Actuator" };
   if (lower.includes("ahu") || incident.category === "HVAC") return { tool: "HVAC Bag", part: "Valve Actuator" };
   if (lower.includes("core") || lower.includes("dante") || incident.category === "Network") return { tool: "Patch Kit", part: "SFP Module" };
   if (lower.includes("panel") || lower.includes("phase") || incident.category === "Electrical") return { tool: "Meter + PPE", part: "Breaker Lug" };
@@ -677,6 +809,21 @@ function workOrderAction(order) {
     if (order.status === "GETTING KIT") return "grabbing mag tables and stanchions";
     if (order.status === "FIXING") return "opening another screening lane";
     return "watching wait time drop";
+  }
+  if (title.includes("freshwater") || title.includes("fixtures")) {
+    if (order.status === "GETTING KIT") return "getting valve key and pressure gauge";
+    if (order.status === "FIXING") return "turning water valve on and resetting fixtures";
+    return "verifying fixture pressure";
+  }
+  if (title.includes("cleanliness") || title.includes("spill")) {
+    if (order.status === "GETTING KIT") return "getting mop kit and cones";
+    if (order.status === "FIXING") return "cleaning area and reopening flow";
+    return "checking floor is dry";
+  }
+  if (title.includes("refrigeration")) {
+    if (order.status === "GETTING KIT") return "getting refrigeration kit";
+    if (order.status === "FIXING") return "resetting compressor and moving cold stock";
+    return "checking cold-hold temp";
   }
   if (title.includes("concessions")) {
     if (order.status === "GETTING KIT") return "getting POS drawer and stock tubs";
@@ -755,6 +902,13 @@ function inferIncidentPlaybook(category, title, source) {
       why: "A guest behavior flag tripped after simulated crowd friction, alcohol sales, or seating conflict in a public area.",
       impact: "Nearby density tightens, security response time is consumed, and guest experience drops if the escort stalls.",
       fix: "Assign Security, keep the guest moving to the nearest exit bank, and backfill the area with Guest Services."
+    };
+  }
+  if (lower.includes("refrigeration")) {
+    return {
+      why: "Cooler performance dropped after heavy stand use or unstable power to concession equipment.",
+      impact: "Cold inventory can be lost, food safety margin drops, and stand throughput falls while staff move product.",
+      fix: "Send facility tech with refrigeration kit, verify compressor power, move cold inventory, and recheck temperature."
     };
   }
   if (lower.includes("concessions")) {
@@ -836,14 +990,35 @@ function applyMitigation(incident) {
     staff.Security.assigned = Math.min(staff.Security.checkedIn, staff.Security.assigned + 1);
     state.money.cost += 120;
     addDispatch("SECURITY", "Mitigation applied: escort team has control and is moving the guest to an exit bank.");
-  } else if (lower.includes("concessions")) {
+  } else if (lower.includes("concessions") && !lower.includes("refrigeration")) {
     concessions.openStands += 1;
     concessions.staff += 3;
     state.money.cost += 420;
     addDispatch("CONCESSIONS", "Mitigation applied: extra stand and POS staff opened.");
+  } else if (lower.includes("freshwater") || lower.includes("fixtures")) {
+    rooms.filter((room) => room.name.includes("Restrooms") || room.name.includes("Concessions")).forEach((room) => {
+      const res = roomRuntime.get(room.id).resources;
+      if (res.freshwater !== null) res.freshwater = Math.min(100, res.freshwater + 42);
+      if (res.fixtures !== null) res.fixtures = Math.min(100, res.fixtures + 35);
+    });
+    addDispatch("FACILITY", "Mitigation applied: water pressure valve opened and restroom fixtures restored.");
+  } else if (lower.includes("cleanliness") || lower.includes("spill")) {
+    rooms.forEach((room) => {
+      const res = roomRuntime.get(room.id).resources;
+      if (incident.source === room.name || room.group === "Public") res.cleanliness = Math.min(100, res.cleanliness + 32);
+    });
+    addDispatch("CUSTODIAL", "Mitigation applied: crew cleaned area, replaced liners, and reopened traffic.");
+  } else if (lower.includes("refrigeration")) {
+    rooms.filter((room) => room.name.includes("Concessions") || room.id === "catering").forEach((room) => {
+      const res = roomRuntime.get(room.id).resources;
+      if (res.refrigeration !== null) res.refrigeration = Math.min(100, res.refrigeration + 34);
+    });
+    addDispatch("FACILITY", "Mitigation applied: compressor reset and cold inventory moved.");
   } else if (lower.includes("panel overload") || lower.includes("phase imbalance")) {
     state.extraLightingLoad = Math.max(0, state.extraLightingLoad - 18);
     state.lobbyDecorativeLights = false;
+    const electrical = roomRuntime.get("mainElectrical")?.resources;
+    if (electrical) electrical.panelTemp = Math.max(88, electrical.panelTemp - 22);
     addDispatch("ELECTRICAL", "Mitigation applied: shed lobby lights and reduced added production load.");
   } else if (lower.includes("core-sw-a")) {
     state.coreAFailed = false;
@@ -908,6 +1083,12 @@ function staffingCoverage(name) {
   return clamp(group.assigned / Math.max(1, group.scheduled), 0.35, 1.25);
 }
 
+function checkedInRatio(name) {
+  const group = staff[name];
+  if (!group) return 1;
+  return clamp(group.checkedIn / Math.max(1, group.scheduled), 0, 1.25);
+}
+
 function phaseArrivalRate() {
   const p = phase();
   const base = {
@@ -937,7 +1118,7 @@ function updateCrowd(dt) {
   state.admissions.arrived += arrivals;
   state.crowd.outsideQueue += arrivals;
 
-  const securityStaffFactor = staffingCoverage("Security") * (staff.Security.checkedIn / staff.Security.scheduled);
+  const securityStaffFactor = staffingCoverage("Security") * checkedInRatio("Security");
   const securityThroughput = (state.securityLanes * 16) * securityStaffFactor;
   const baseScanThroughput = 140 * staffingCoverage("Box Office");
   const admissions = state.admissions;
@@ -1169,6 +1350,11 @@ function taskProgress(name) {
 
 function updateBandLifecycle(dt) {
   if (!state.crewDeployed) return;
+  if (state.closingMode) {
+    state.band.status = "EXITING";
+    state.band.location = state.closeoutProgress < 82 ? "Staff Exit Route" : "Offsite";
+    return;
+  }
   if (state.setupProgress >= 42 && ["OFFSITE", "BANDING"].includes(state.band.status)) {
     state.band.status = "ARRIVING";
     addDispatch("BAND TM", "Band vans are at the dock. Backline instruments inbound.");
@@ -1241,9 +1427,10 @@ function updateRooms(dt) {
     westExit: phase() === "EGRESS" ? c.egress * 0.18 + c.concourse * 0.08 : c.concourse * 0.01,
     boxOffice: c.ticketScan * 0.25,
     merch: phase() === "CHANGEOVER" ? 90 + c.concourse * 0.02 : c.concourse * 0.01,
-    concessionsA: concessions.waiting * 0.32,
-    concessionsB: concessions.waiting * 0.36,
-    concessionsC: concessions.waiting * 0.32,
+    concessionsA: concessions.waiting * 0.25,
+    concessionsB: concessions.waiting * 0.28,
+    concessionsC: concessions.waiting * 0.25,
+    concessionsD: concessions.waiting * 0.22,
     restroomsA: phase() === "CHANGEOVER" ? c.seatsFloor * 0.012 : c.concourse * 0.012,
     restroomsB: phase() === "CHANGEOVER" ? c.seatsFloor * 0.01 : c.concourse * 0.01,
     restroomsC: phase() === "CHANGEOVER" ? c.seatsFloor * 0.009 : c.concourse * 0.011,
@@ -1288,6 +1475,88 @@ function updateRooms(dt) {
     runtime.power = room.power + runtime.occupancy * 0.008;
     if (state.lobbyDecorativeLights && room.id === "mainLobby") runtime.power += 14;
   });
+}
+
+function updateRoomResources(dt) {
+  rooms.forEach((room) => {
+    const runtime = roomRuntime.get(room.id);
+    const res = runtime.resources;
+    const density = runtime.occupancy / Math.max(1, room.cap);
+    const custodial = staffingCoverage("Custodial");
+
+    if (res.cleanliness !== null) {
+      const wear = (room.group === "Public" ? 0.09 : 0.035) * density * dt;
+      const recovery = room.group === "Public" ? 0.025 * custodial * dt : 0.012 * dt;
+      res.cleanliness = clamp(res.cleanliness - wear + recovery, 0, 100);
+    }
+    if (res.satisfaction !== null) {
+      const tempPenalty = Math.max(0, runtime.temp - 74) * 0.08 * dt;
+      const dirtyPenalty = Math.max(0, 65 - res.cleanliness) * 0.01 * dt;
+      const crowdPenalty = Math.max(0, density - 0.72) * 0.8 * dt;
+      res.satisfaction = clamp(res.satisfaction - tempPenalty - dirtyPenalty - crowdPenalty + 0.01 * dt, 0, 100);
+    }
+    if (res.freshwater !== null) {
+      const use = (room.name.includes("Restrooms") ? 0.055 : 0.032) * runtime.occupancy * dt / 18;
+      res.freshwater = clamp(res.freshwater - use + 0.04 * dt, 0, 100);
+      res.wastewater = clamp(res.wastewater + use * 0.9 - 0.03 * dt, 0, 100);
+      if (res.fixtures !== null) {
+        res.fixtures = clamp(100 - Math.max(0, 26 - res.freshwater) * 2 - Math.max(0, res.wastewater - 82) * 1.2, 0, 100);
+      }
+    }
+    if (res.refrigeration !== null) {
+      const doorUse = room.name.includes("Concessions") ? concessions.waiting * 0.002 * dt : 0.01 * dt;
+      res.refrigeration = clamp(res.refrigeration - doorUse + 0.025 * dt - (state.utilityAFailed ? 0.08 * dt : 0), 0, 100);
+    }
+    if (room.id === "loadingDock") {
+      res.casesWaiting = clamp((100 - state.unloadProgress) * 7.4, 0, 740);
+      res.dockAvailability = clamp((state.dockDoorsOpen ? 86 : 28) - state.trucksArrived * 2.4 + state.forkliftsActive * 4, 0, 100);
+    }
+    if (room.id === "mainElectrical") {
+      const hotPanel = panels.reduce((max, panel) => Math.max(max, panel.kw / panel.max), 0);
+      res.panelTemp = clamp(res.panelTemp + (hotPanel * 118 - res.panelTemp) * dt * 0.03, 70, 168);
+    }
+    if (room.id === "medical") {
+      const medicalIncidents = incidents.filter((incident) => incident.category === "Medical" && incident.status !== "RESOLVED").length;
+      res.treatmentSpaces = clamp(4 - medicalIncidents, 0, 4);
+    }
+  });
+
+  roomResourceIncidents();
+}
+
+function roomResourceIncidents() {
+  const restroom = rooms.find((room) => room.name.includes("Restrooms") && roomRuntime.get(room.id).resources.freshwater < 28);
+  if (restroom) {
+    createIncident("Facility", "WARNING", "Restroom freshwater pressure dropping", restroom.name, [
+      "Fixtures begin falling offline",
+      "Concessions hand sinks may be limited",
+      "Guest satisfaction drops until water pressure recovers"
+    ]);
+  }
+  const dirty = rooms.find((room) => room.group === "Public" && roomRuntime.get(room.id).resources.cleanliness < 52);
+  if (dirty) {
+    createIncident("Facility", "ADVISORY", `Cleanliness falling in ${dirty.name}`, dirty.name, [
+      "Guests slow around the area",
+      "Custodial response needed",
+      "Satisfaction score falling"
+    ]);
+  }
+  const warmConcession = rooms.find((room) => room.name.includes("Concessions") && roomRuntime.get(room.id).resources.refrigeration < 70);
+  if (warmConcession) {
+    createIncident("Facility", "WARNING", `Refrigeration temperature rising at ${warmConcession.name}`, warmConcession.name, [
+      "Cold inventory risk",
+      "Sales capacity reduced",
+      "Facility tech needs to verify power and compressor"
+    ]);
+  }
+  const electrical = roomRuntime.get("mainElectrical")?.resources;
+  if (electrical?.panelTemp > 145) {
+    createIncident("Electrical", "WARNING", "Main Electrical panel temperature high", "Main Electrical", [
+      "Thermal scan required",
+      "Noncritical loads should be shed",
+      "Breaker trip risk rising"
+    ]);
+  }
 }
 
 function workOrderRoomOccupancy() {
@@ -1620,8 +1889,10 @@ function updateConsequences() {
 
 function updateSimulation(dt) {
   state.simMinute += dt;
+  updateCloseout(dt);
   const nextScheduled = effectiveStart(state.phaseIndex + 1);
-  if (nextScheduled !== undefined && state.simMinute >= nextScheduled && state.phaseIndex < phaseNames.length - 1 && phaseReadyForAutoAdvance()) {
+  const loadOutComplete = phase() === "LOAD-OUT" && phaseReadyForAutoAdvance();
+  if (!state.closingMode && nextScheduled !== undefined && state.phaseIndex < phaseNames.length - 1 && phaseReadyForAutoAdvance() && (state.simMinute >= nextScheduled || loadOutComplete)) {
     advancePhase(false);
   }
 
@@ -1633,6 +1904,7 @@ function updateSimulation(dt) {
   updateCrewTasks(dt);
   updateWorkOrders(dt);
   updateRooms(dt);
+  updateRoomResources(dt);
   updateConcessions(dt);
   updateStaffAndMoney(dt);
   updateElectrical(dt);
@@ -1650,6 +1922,27 @@ function updateSimulation(dt) {
   if (dispatchAccumulator > 9) {
     dispatchAccumulator = 0;
     randomDispatch();
+  }
+}
+
+function updateCloseout(dt) {
+  if (!state.closingMode) return;
+  state.closeoutProgress = clamp(state.closeoutProgress + dt * 4.2, 0, 100);
+  state.actorFilter = "WORKERS";
+  state.admissions.mode = "CLOSED";
+  state.crowd = {
+    ...state.crowd,
+    outsideQueue: 0,
+    security: 0,
+    ticketScan: 0,
+    lobby: Math.max(0, state.crowd.lobby - dt * 80),
+    concourse: Math.max(0, state.crowd.concourse - dt * 130),
+    seatsFloor: Math.max(0, state.crowd.seatsFloor - dt * 150),
+    egress: Math.max(0, state.crowd.egress - dt * 170),
+    attendance: Math.max(0, state.crowd.attendance - dt * 260)
+  };
+  if (state.closeoutProgress >= 100 && !state.nextDayReady) {
+    finishEventCloseout();
   }
 }
 
@@ -1676,7 +1969,7 @@ function updateGuestBehavior(dt) {
   state.badGuests.forEach((guest) => {
     if (guest.stage === "REMOVED") return;
     const previous = guest.stage;
-    const securityCoverage = staffingCoverage("Security") * (staff.Security.checkedIn / staff.Security.scheduled);
+    const securityCoverage = staffingCoverage("Security") * checkedInRatio("Security");
     guest.progress = clamp(guest.progress + dt * (14 + securityCoverage * 8), 0, 110);
     if (guest.progress < 24) guest.stage = "ACTING OUT";
     else if (guest.progress < 48) guest.stage = "SECURITY EN ROUTE";
@@ -1744,6 +2037,23 @@ function phaseReadyForAutoAdvance() {
   return true;
 }
 
+function beginEventCloseout() {
+  const firstRun = !state.closingMode && !state.nextDayReady;
+  state.phaseIndex = phaseNames.length - 1;
+  state.phaseActualStarts[state.phaseIndex] ??= state.simMinute;
+  state.closingMode = true;
+  state.closeoutProgress = firstRun ? 0 : state.closeoutProgress;
+  state.actorFilter = "WORKERS";
+  state.band.status = "EXITING";
+  state.band.location = "Staff Exit";
+  state.admissions.mode = "CLOSED";
+  state.nextDayScenario ??= pickNextDayScenario();
+  state.speed = state.speed === 0 ? 20 : state.speed;
+  if (firstRun) {
+    addDispatch("PM", "Teardown complete. Staff and band are exiting through the staff route.");
+  }
+}
+
 function tasksFinishedFor(targetPhase) {
   const tasks = state.crewTasks.filter((task) => task.phase === targetPhase);
   if (!tasks.length) return true;
@@ -1787,10 +2097,7 @@ function advancePhase(manual = true) {
     createIncident("Production", "WARNING", "Headliner delayed by unfinished changeover", "Stage");
   }
   if (to === "DARK" && from === "LOAD-OUT") {
-    state.speed = 0;
-    state.band.status = "BANDING";
-    state.band.location = "Band Room";
-    buildReport();
+    beginEventCloseout();
   }
   addDispatch("CONTROL", `${manual ? "Manual" : "Auto"} phase advance: ${from} to ${to}`);
   phaseStartBriefing(to);
@@ -1854,6 +2161,230 @@ function phaseStartBriefing(to) {
   (briefings[to] || []).forEach(([from, message]) => addDispatch(from, message));
 }
 
+function pickNextDayScenario() {
+  const options = scenarioPresets.filter((scenario) => scenario.name !== state.scenario);
+  return options[Math.floor(Math.random() * options.length)] || scenarioPresets[0];
+}
+
+function finishEventCloseout() {
+  state.closingMode = false;
+  state.nextDayReady = true;
+  state.closeoutProgress = 100;
+  state.speed = 0;
+  state.crewDeployed = false;
+  state.staffIntake = 0;
+  state.forkliftsActive = 0;
+  state.dockDoorsOpen = false;
+  state.trucksArrived = 0;
+  state.band.status = "OFFSITE";
+  state.band.location = "Offsite";
+  addDispatch("CONTROL", `Venue dark and cleared. Next day preset queued: ${state.nextDayScenario?.name || "Normal Concert"}.`);
+  buildReport();
+}
+
+function startNextEventDay() {
+  const nextScenario = state.nextDayScenario || pickNextDayScenario();
+  const nextDay = state.eventDay + 1;
+  const nextIncidentId = state.nextIncidentId + 1;
+  state.speed = 0;
+  state.simMinute = 0;
+  state.phaseIndex = 0;
+  state.timelineDelay = 0;
+  state.timelineStatus = "ON TIME";
+  state.selectedRoomId = "foh";
+  state.selectedProduction = "AUDIO";
+  state.actorFilter = "ALL";
+  state.securityLanes = 6;
+  state.admissions = {
+    mode: "CLOSED",
+    meteredMax: 120,
+    overrideCapacity: false,
+    ticketsSold: nextScenario.tickets,
+    projectedAttendance: nextScenario.tickets,
+    arrived: 0,
+    scanned: 0,
+    inside: 0,
+    exited: 0,
+    turnedAway: 0,
+    autoPausedAt: null
+  };
+  state.lobbyDecorativeLights = true;
+  state.extraLightingLoad = 0;
+  state.utilityAFailed = false;
+  state.atsTimer = 0;
+  state.coreAFailed = false;
+  state.failoverTimer = 0;
+  state.crewDeployed = false;
+  state.dockDoorsOpen = false;
+  state.forkliftsActive = 0;
+  state.trucksArrived = 0;
+  state.unloadedCases = 0;
+  state.unloadProgress = 0;
+  state.setupProgress = 0;
+  state.strikeProgress = 0;
+  state.crewFatigue = 4;
+  state.breaksGiven = 0;
+  state.breakActive = false;
+  state.breakTimer = 0;
+  state.breakStatus = "WORKING";
+  state.staffIntake = 0;
+  state.guestErrandLoad = 0;
+  state.badGuests = [];
+  state.workOrders = [];
+  state.band = {
+    status: "BANDING",
+    arrivalProgress: 0,
+    instrumentLoad: 0,
+    soundcheck: 0,
+    location: "Band Room"
+  };
+  resetCrewTasksForNextDay();
+  state.reportGenerated = false;
+  state.eventDay = nextDay;
+  state.closingMode = false;
+  state.closeoutProgress = 0;
+  state.nextDayReady = false;
+  state.nextDayScenario = null;
+  state.peakAttendance = 0;
+  state.totalWaitMinutes = 0;
+  state.waitSamples = 1;
+  state.criticalCount = 0;
+  state.uptimeMinutes = 0;
+  state.downtimeMinutes = 0;
+  state.phaseActualStarts = Array(phaseNames.length).fill(null);
+  state.phaseActualStarts[0] = 0;
+  state.crowd = {
+    outsideQueue: 0,
+    security: 0,
+    ticketScan: 0,
+    lobby: 0,
+    concourse: 0,
+    seatsFloor: 0,
+    egress: 0,
+    exited: 0,
+    attendance: 0
+  };
+  state.money = {
+    revenue: 0,
+    tickets: 0,
+    concessions: 0,
+    merch: 0,
+    parking: 0,
+    cost: 0,
+    staffing: 0,
+    power: 0,
+    fuel: 0,
+    overtime: 0
+  };
+  state.weather = { temp: 58, ...nextScenario.weather };
+  state.production = {
+    soundCheckProgress: 0,
+    changeoverProgress: 0,
+    danteLatency: 1.4,
+    danteLoss: 0,
+    rfInterference: false,
+    lightingNodeFault: false,
+    playbackAFailed: false,
+    videoBackupActive: false,
+    stageReady: false
+  };
+  state.nextIncidentId = nextIncidentId;
+  state.scenario = nextScenario.name;
+  applyScenarioStaff(nextScenario);
+  resetSystemsForNextDay();
+  incidents.length = 0;
+  dispatch.length = 0;
+  roomRuntime.forEach((runtime, id) => {
+    const room = rooms.find((item) => item.id === id);
+    runtime.occupancy = 0;
+    runtime.temp = room?.baseTemp || 70;
+    runtime.incidents = [];
+    runtime.network = "OK";
+    runtime.power = room?.power || 0;
+    runtime.resources = resourceDefaultsFor(room || {});
+  });
+  mapStaticSignature = "";
+  incidentRenderSignature = "";
+  addDispatch("CONTROL", `Event day ${state.eventDay} loaded: ${nextScenario.name}. ${nextScenario.note}`);
+  addDispatch("CONTROL", "Venue is DARK. Send crew in when ready for the next load-in.");
+  renderAll();
+}
+
+function resetCrewTasksForNextDay() {
+  const starts = {
+    "Event Advance": 100,
+    "Warehouse Prep": 35,
+    "Truck Load": 20
+  };
+  state.crewTasks.forEach((task) => {
+    task.progress = starts[task.name] ?? 0;
+    task.status = task.progress >= 100 ? "DONE" : task.progress > 0 ? "READY" : "WAITING";
+  });
+}
+
+function applyScenarioStaff(scenario) {
+  staff.Security.scheduled = scenario.security;
+  staff.Security.checkedIn = Math.max(0, scenario.security - Math.round(scenario.security * 0.08));
+  staff.Security.assigned = Math.max(0, staff.Security.checkedIn - 3);
+  staff["Guest Services"].scheduled = scenario.guestServices;
+  staff["Guest Services"].checkedIn = Math.max(0, scenario.guestServices - 2);
+  staff["Guest Services"].assigned = Math.max(0, staff["Guest Services"].checkedIn - 3);
+  staff["Box Office"].scheduled = scenario.boxOffice;
+  staff["Box Office"].checkedIn = Math.max(0, scenario.boxOffice - 1);
+  staff["Box Office"].assigned = Math.max(0, staff["Box Office"].checkedIn - 1);
+}
+
+function resetSystemsForNextDay() {
+  panels.forEach((panel) => {
+    panel.kw = {
+      "House Lighting": 32,
+      HVAC: 86,
+      Concessions: 68,
+      "Production A": 108,
+      "Production B": 94,
+      "Stage Motors": 22,
+      FOH: 18,
+      Video: 52,
+      Audio: 44,
+      Emergency: 15
+    }[panel.name] || panel.kw;
+  });
+  utilities.A = { online: true, voltage: 208, pf: 0.93, l1: 290, l2: 282, l3: 301 };
+  utilities.B = { online: true, voltage: 208, pf: 0.91, l1: 116, l2: 123, l3: 119 };
+  backup.gen1.state = "OFF";
+  backup.gen1.timer = 0;
+  backup.gen1.fuel = 91;
+  backup.gen2.state = "OFF";
+  backup.gen2.timer = 0;
+  backup.gen2.fuel = 88;
+  backup.upsA.charge = 94;
+  backup.upsA.load = 31;
+  backup.upsA.runtime = 36.2;
+  backup.upsB.charge = 97;
+  backup.upsB.load = 22;
+  backup.upsB.runtime = 52.4;
+  switches.forEach((sw) => {
+    sw.loss = 0;
+    sw.latency = sw.name.includes("CORE") ? 1.2 : 1.8;
+    sw.online = true;
+  });
+  hvac.forEach((ahu, index) => {
+    ahu.supply = 55 + index;
+    ahu.ret = 70;
+    ahu.fan = 62 - index * 7;
+    ahu.cooling = 44 - index * 7;
+    ahu.static = 1.6 - index * 0.2;
+    ahu.filter = index === 2 ? "FAIR" : "GOOD";
+    ahu.online = true;
+  });
+  concessions.openStands = 5;
+  concessions.staff = 24;
+  concessions.waiting = 0;
+  concessions.avgService = 42;
+  concessions.pos = "ONLINE";
+  concessions.inventory = { Water: 1482, Soda: 2841, "Hot Dogs": 716, Pizza: 483 };
+}
+
 function maybeRandomIncident() {
   const p = phase();
   const chance = ["HEADLINER", "CHANGEOVER", "EGRESS"].includes(p) ? 0.42 : ["DOORS", "LOAD-IN", "LOAD-OUT"].includes(p) ? 0.28 : 0.12;
@@ -1897,12 +2428,12 @@ function randomDispatch() {
   addDispatch(from, message);
 }
 
-function renderAll() {
+function renderAll(options = {}) {
   renderHeader();
   renderMapActions();
   renderPhaseTrack();
   renderKpis();
-  renderVenueMap();
+  if (!options.skipMap) renderVenueMap();
   renderInspector();
   renderAdmissions();
   renderCrowd();
@@ -1919,6 +2450,7 @@ function renderAll() {
   renderIncidents();
   renderMoney();
   renderScore();
+  renderDebugPanel();
 }
 
 function renderAdmissions() {
@@ -1926,7 +2458,9 @@ function renderAdmissions() {
   els.admissionsButtons.innerHTML = admissionsModes.map((mode) => (
     `<button type="button" data-admissions="${mode}" class="${admissions.mode === mode ? "active" : ""}">${mode}</button>`
   )).join("");
-  els.admissionsMeter.value = Math.round(admissions.meteredMax);
+  if (document.activeElement !== els.admissionsMeter) {
+    els.admissionsMeter.value = Math.round(admissions.meteredMax);
+  }
   els.capacityOverride.classList.toggle("active", admissions.overrideCapacity);
   els.capacityOverride.textContent = admissions.overrideCapacity ? "Override On" : "Override Capacity";
   const insidePct = admissions.inside / capacity * 100;
@@ -1946,7 +2480,10 @@ function renderAdmissions() {
 }
 
 function renderMapActions() {
-  els.sendCrewIn.textContent = state.crewDeployed ? "Crew On Site" : "Send Crew In";
+  els.actorFilterButtons.innerHTML = actorFilters.map((filter) => (
+    `<button type="button" data-actor-filter="${filter}" class="${state.actorFilter === filter ? "active" : ""}">${filter}</button>`
+  )).join("");
+  els.sendCrewIn.textContent = !state.crewDeployed ? "Send Crew In" : state.staffIntake < 100 ? "Crew Walking In" : "Replay Staff Intake";
   els.openDock.textContent = state.dockDoorsOpen ? "Dock Doors Open" : "Open Dock Doors";
   els.callForklift.textContent = `Call Forklift (${state.forkliftsActive})`;
   els.crewBreak.textContent = state.breakActive ? state.breakStatus : `Crew Break (${state.breaksGiven})`;
@@ -1965,7 +2502,7 @@ function renderHeader() {
   const nextName = phaseNames[state.phaseIndex + 1] || "Complete";
   const nextTime = scheduledStarts[state.phaseIndex + 1] === undefined ? "--:--" : formatSimTime(effectiveStart(state.phaseIndex + 1));
   const delay = currentDelayMinutes();
-  els.phaseEta.textContent = `Next: ${nextName} at ${nextTime} · ${delay >= 0 ? "+" : ""}${delay}m vs schedule`;
+  els.phaseEta.textContent = `Day ${state.eventDay} · Next: ${nextName} at ${nextTime} · ${delay >= 0 ? "+" : ""}${delay}m vs schedule`;
   els.speedButtons.innerHTML = speeds.map((speed) => (
     `<button type="button" data-speed="${speed}" class="${state.speed === speed ? "active" : ""}">${speed === 0 ? "PAUSED" : `${speed}x`}</button>`
   )).join("");
@@ -2006,9 +2543,31 @@ function renderKpis() {
 }
 
 function renderVenueMap() {
-  const architectureHtml = buildMapArchitecture();
   const moverHtml = buildPopulationDots();
-  els.venueMap.innerHTML = architectureHtml + rooms.map((room) => {
+  const staticSignature = venueMapStaticSignature();
+  let moverLayer = els.venueMap.querySelector(".map-mover-layer");
+  if (staticSignature !== mapStaticSignature || !moverLayer) {
+    mapStaticSignature = staticSignature;
+    els.venueMap.innerHTML = `<div class="map-static-layer">${buildMapArchitecture()}${buildRoomButtons()}</div><div class="map-mover-layer"></div>`;
+    moverLayer = els.venueMap.querySelector(".map-mover-layer");
+  }
+  moverLayer.innerHTML = moverHtml;
+}
+
+function venueMapStaticSignature() {
+  const roomLabelTick = Math.floor(state.simMinute / 3);
+  const roomBits = rooms.map((room) => {
+    const runtime = roomRuntime.get(room.id);
+    const density = densityFrom(runtime.occupancy, room);
+    const hasIncident = runtime.incidents.some((id) => incidentById(id)?.status !== "RESOLVED");
+    return `${room.id}:${density}:${hasIncident ? 1 : 0}`;
+  }).join("|");
+  const beamState = `${phase()}:${state.crewDeployed ? 1 : 0}:${state.production.lightingNodeFault ? 1 : 0}`;
+  return `${state.selectedRoomId}:${state.actorFilter}:${state.dockDoorsOpen ? 1 : 0}:${roomLabelTick}:${beamState}:${roomBits}`;
+}
+
+function buildRoomButtons() {
+  return rooms.map((room) => {
     const runtime = roomRuntime.get(room.id);
     const density = densityFrom(runtime.occupancy, room);
     const hasIncident = runtime.incidents.some((id) => incidentById(id)?.status !== "RESOLVED");
@@ -2019,7 +2578,7 @@ function renderVenueMap() {
       <span class="room-name">${room.name}</span>
       <span class="room-meta"><span>${fmtNumber(runtime.occupancy)}</span><span>${runtime.temp.toFixed(0)}°</span></span>
     </button>`;
-  }).join("") + moverHtml;
+  }).join("");
 }
 
 function groupSlug(group) {
@@ -2027,13 +2586,52 @@ function groupSlug(group) {
 }
 
 function buildMapArchitecture() {
+  const showGuestGuides = state.actorFilter !== "WORKERS";
+  const showWorkerGuides = state.actorFilter !== "GUESTS";
   return `
+    <i class="blueprint-frame"></i>
     <i class="map-zone concourse-ring"></i>
     <i class="map-zone bowl-shell"></i>
     <i class="map-zone public-apron"></i>
     <i class="map-zone boh-strip"></i>
     <i class="map-zone ops-yard"></i>
     <i class="map-zone truck-yard"></i>
+    <i class="map-zone stage-house"></i>
+    <i class="map-zone dock-apron"></i>
+    <i class="map-zone forklift-park"></i>
+    <i class="stage-wing stage-left-wing"></i>
+    <i class="stage-wing stage-right-wing"></i>
+    <i class="stage-wing upstage-truck-line"></i>
+    <i class="barricade barricade-front"></i>
+    <i class="barricade barricade-left"></i>
+    <i class="barricade barricade-right"></i>
+    ${showGuestGuides ? `
+      <i class="route-guide guest guest-left"></i>
+      <i class="route-guide guest guest-top"></i>
+      <i class="route-guide guest guest-right"></i>
+      <i class="route-guide guest guest-bottom"></i>
+      <i class="route-guide guest guest-entry-a"></i>
+      <i class="route-guide guest guest-entry-b"></i>
+      <i class="route-guide guest guest-vom-n"></i>
+      <i class="route-guide guest guest-vom-s"></i>
+    ` : ""}
+    ${showWorkerGuides ? `
+      <i class="route-guide staff staff-left"></i>
+      <i class="route-guide staff staff-top"></i>
+      <i class="route-guide staff staff-right"></i>
+      <i class="route-guide staff staff-service"></i>
+      <i class="route-guide service service-road-guide"></i>
+      <i class="route-guide service dock-feed"></i>
+      <i class="route-guide service forklift-feed"></i>
+      <i class="route-guide service stage-feed"></i>
+      <i class="route-guide service stage-cross-feed"></i>
+    ` : ""}
+    <i class="seating seating-north"></i>
+    <i class="seating seating-south"></i>
+    <i class="seating seating-west"></i>
+    <i class="seating seating-ne"></i>
+    <i class="seating seating-se"></i>
+    ${Array.from({ length: 7 }, (_, i) => `<i class="seat-aisle aisle-${i + 1}"></i>`).join("")}
     <i class="corridor main-spine"></i>
     <i class="corridor north-spine"></i>
     <i class="corridor south-spine"></i>
@@ -2041,12 +2639,19 @@ function buildMapArchitecture() {
     <i class="corridor bowl-cross lower"></i>
     <i class="corridor service-tunnel"></i>
     <i class="corridor boh-hall"></i>
+    <i class="corridor left-staff-hall"></i>
+    <i class="corridor right-staff-hall"></i>
+    <i class="corridor service-hall"></i>
     <i class="corridor entry-lanes"></i>
     <i class="corridor service-road"></i>
     <i class="garage-lane north"></i>
     <i class="garage-lane south"></i>
     <i class="dock-stripe"></i>
     <i class="dock-stripe two"></i>
+    ${Array.from({ length: 5 }, (_, i) => `<i class="dock-bay dock-bay-${i + 1}"></i>`).join("")}
+    ${Array.from({ length: 6 }, (_, i) => `<i class="parking-stall bus-stall bus-stall-${i + 1}"></i>`).join("")}
+    ${Array.from({ length: 6 }, (_, i) => `<i class="parking-stall fork-stall fork-stall-${i + 1}"></i>`).join("")}
+    ${Array.from({ length: 10 }, (_, i) => `<i class="utility-door utility-door-${i + 1}"></i>`).join("")}
     <i class="door main-entry"></i>
     <i class="door vip-door"></i>
     <i class="door dock-door ${state.dockDoorsOpen ? "open" : ""}"></i>
@@ -2055,12 +2660,24 @@ function buildMapArchitecture() {
     <i class="door north-portal"></i>
     <i class="door south-portal"></i>
     <i class="door stage-door"></i>
+    <i class="map-icon truck-icon"></i>
+    <i class="map-icon bus-one"></i>
+    <i class="map-icon bus-two"></i>
+    <i class="map-icon fork-icon"></i>
+    <span class="ramp-arrow west-ramp">←</span>
+    <span class="ramp-arrow east-ramp">→</span>
     ${buildStageLightBeams()}
     <span class="route-label entry">Public entry flow</span>
-    <span class="route-label service">Service road / load path</span>
+    <span class="route-label service">Service road / load path (staff / trucks only)</span>
     <span class="route-label egress">Exit banks</span>
+    <span class="route-label backstage-top">Backstage Hall (staff only)</span>
+    <span class="route-label backstage-side">Backstage Hall (staff only)</span>
     <span class="map-label bowl">Arena Bowl</span>
-    <span class="map-label lobby">Entry / Public</span>
+    <span class="map-label floor">Floor<br><small>General Admission / Chairs</small></span>
+    <span class="map-label north-bowl">North Bowl</span>
+    <span class="map-label south-bowl">South Bowl</span>
+    <span class="map-label west-bowl">West Bowl</span>
+    <span class="map-label lobby">Entry Stack</span>
     <span class="map-label boh">Backstage Hall</span>
     <span class="map-label ops">Plant / Yard</span>
   `;
@@ -2077,21 +2694,56 @@ function buildStageLightBeams() {
   </div>`;
 }
 
+const ROUTES = {
+  public: {
+    queue: [{ x: 0.8, y: 40 }, { x: 6.2, y: 40 }, { x: 10.8, y: 40 }, { x: 10.8, y: 52 }],
+    loop: [{ x: 10.8, y: 52 }, { x: 17.8, y: 52 }, { x: 17.8, y: 18.5 }, { x: 51, y: 18.5 }, { x: 86.4, y: 18.5 }, { x: 86.4, y: 76 }, { x: 51, y: 76 }, { x: 17.8, y: 76 }, { x: 17.8, y: 52 }],
+    seats: [{ x: 52, y: 36 }, { x: 62.5, y: 48.4 }, { x: 52, y: 63 }, { x: 34, y: 58 }, { x: 32, y: 42 }, { x: 52, y: 36 }],
+    concessionNorth: [{ x: 51, y: 36 }, { x: 51, y: 31.8 }, { x: 51, y: 18.5 }, { x: 86.4, y: 18.5 }, { x: 89.8, y: 18.5 }, { x: 94.4, y: 19.3 }],
+    concessionSouth: [{ x: 51, y: 63 }, { x: 51, y: 68 }, { x: 51, y: 76 }, { x: 86.4, y: 76 }, { x: 89.8, y: 76 }, { x: 94.4, y: 44.2 }],
+    restroomNorth: [{ x: 51, y: 36 }, { x: 51, y: 31.8 }, { x: 51, y: 18.5 }, { x: 82, y: 18.5 }],
+    restroomSouth: [{ x: 51, y: 63 }, { x: 51, y: 68 }, { x: 51, y: 76 }, { x: 82, y: 76 }],
+    merch: [{ x: 46, y: 61 }, { x: 36, y: 76 }, { x: 17.8, y: 76 }, { x: 17.8, y: 52 }, { x: 10.8, y: 52 }, { x: 6.5, y: 18.6 }],
+    returnNorth: [{ x: 94.4, y: 19.3 }, { x: 89.8, y: 18.5 }, { x: 86.4, y: 18.5 }, { x: 51, y: 18.5 }, { x: 51, y: 31.8 }, { x: 51, y: 40 }],
+    returnSouth: [{ x: 94.4, y: 44.2 }, { x: 89.8, y: 76 }, { x: 86.4, y: 76 }, { x: 51, y: 76 }, { x: 51, y: 68 }, { x: 51, y: 58 }],
+    egressEast: [{ x: 52, y: 50 }, { x: 52, y: 68 }, { x: 52, y: 76 }, { x: 86.4, y: 76 }, { x: 95, y: 88 }],
+    egressWest: [{ x: 52, y: 50 }, { x: 36, y: 68 }, { x: 18, y: 76 }, { x: 10.8, y: 76 }, { x: 4.6, y: 88 }]
+  },
+  staff: {
+    entryToIntake: [{ x: 1.4, y: 32.8 }, { x: 1.4, y: 12.4 }, { x: 10.8, y: 12.4 }],
+    topToStage: [{ x: 34.5, y: 6.9 }, { x: 34.5, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }],
+    dockToStage: [{ x: 52, y: 88.8 }, { x: 52, y: 82 }, { x: 66, y: 82 }, { x: 89, y: 82 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }],
+    stageToDock: [{ x: 76, y: 50 }, { x: 82.4, y: 50 }, { x: 89, y: 50 }, { x: 89, y: 82 }, { x: 66, y: 82 }, { x: 52, y: 82 }, { x: 52, y: 88.8 }],
+    rightPlant: [{ x: 89, y: 50 }, { x: 94.4, y: 52 }],
+    fohFromRight: [{ x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 66, y: 50 }, { x: 52, y: 54.7 }, { x: 48.8, y: 54.7 }]
+  },
+  service: {
+    truckIn: [{ x: 4, y: 96.2 }, { x: 36, y: 96.2 }, { x: 36, y: 92.8 }, { x: 43.5, y: 92.8 }, { x: 43.5, y: 89.2 }, { x: 52, y: 89.2 }],
+    truckOut: [{ x: 52, y: 89.2 }, { x: 43.5, y: 89.2 }, { x: 43.5, y: 92.8 }, { x: 62, y: 92.8 }, { x: 82, y: 96.2 }],
+    forkliftToStage: [{ x: 75, y: 88.9 }, { x: 66, y: 88.9 }, { x: 66, y: 82 }, { x: 89, y: 82 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }],
+    forkliftToDock: [{ x: 75, y: 88.9 }, { x: 66, y: 88.9 }, { x: 52, y: 88.9 }, { x: 43.5, y: 88.9 }]
+  }
+};
+
 function buildPopulationDots() {
+  const egressVolume = state.crowd.egress + (phase() === "EGRESS" ? state.crowd.seatsFloor * 0.25 : 0);
+  const showGuests = state.actorFilter !== "WORKERS";
+  const showWorkers = state.actorFilter !== "GUESTS";
   return [
-    buildFlowDots("queue", state.crowd.outsideQueue, [{ x: 1.5, y: 33 }, { x: 10, y: 33 }, { x: 18, y: 33 }, { x: 18, y: 50 }], 70, 115, { action: "SCAN", speed: 0.18 }),
-    buildFlowDots("public-dot", state.crowd.lobby + state.crowd.concourse, [{ x: 18, y: 50 }, { x: 28, y: 50 }, { x: 51, y: 15 }, { x: 81, y: 50 }, { x: 51, y: 91 }, { x: 28, y: 50 }], 82, 90, { action: "ENTER", speed: 0.13 }),
-    buildFlowDots("public-dot", state.crowd.seatsFloor, [{ x: 45, y: 40 }, { x: 56, y: 53 }, { x: 46, y: 68 }, { x: 34, y: 54 }, { x: 45, y: 40 }], 58, 150, { action: "SEAT", speed: 0.09 }),
-    buildGuestErrandDots(),
-    buildStaffDeploymentDots(),
-    buildCrewTaskDots(),
-    buildLoadInDots(),
-    buildBandDots(),
-    buildBreakDots(),
-    buildWorkOrderDots(),
-    buildBadGuestDots(),
-    buildFlowDots("egress-dot", state.crowd.egress + (phase() === "EGRESS" ? state.crowd.seatsFloor * 0.25 : 0), [{ x: 47, y: 54 }, { x: 80, y: 72 }, { x: 58, y: 97 }, { x: 22, y: 72 }, { x: 8, y: 54 }], 68, 100, { action: "EXIT", speed: 0.22, actionPortion: 0.16 }),
-    buildRoomDots()
+    showGuests ? buildFlowDots("queue actor-guest", state.crowd.outsideQueue, ROUTES.public.queue, 70, 115, { action: "SCAN", speed: 0.18 }) : "",
+    showGuests ? buildFlowDots("public-dot actor-guest", state.crowd.lobby + state.crowd.concourse, ROUTES.public.loop, 82, 90, { action: "ENTER", speed: 0.13 }) : "",
+    showGuests ? buildFlowDots("public-dot actor-guest", state.crowd.seatsFloor, ROUTES.public.seats, 58, 150, { action: "SEAT", speed: 0.09 }) : "",
+    showGuests ? buildGuestErrandDots() : "",
+    showWorkers ? state.closingMode ? buildCloseoutStaffDots() : buildStaffDeploymentDots() : "",
+    showWorkers ? buildCrewTaskDots() : "",
+    showWorkers ? buildLoadInDots() : "",
+    showWorkers ? buildBandDots() : "",
+    showWorkers ? buildBreakDots() : "",
+    showWorkers ? buildWorkOrderDots() : "",
+    showGuests ? buildBadGuestDots() : "",
+    showGuests ? buildFlowDots("egress-dot actor-guest", egressVolume * 0.52, ROUTES.public.egressEast, 34, 82, { action: "EXIT", speed: 0.22, actionPortion: 0.18 }) : "",
+    showGuests ? buildFlowDots("egress-dot actor-guest", egressVolume * 0.48, ROUTES.public.egressWest, 34, 82, { action: "EXIT", speed: 0.22, actionPortion: 0.18 }) : "",
+    state.actorFilter === "ALL" ? buildRoomDots() : ""
   ].join("");
 }
 
@@ -2101,27 +2753,26 @@ function buildGuestErrandDots() {
   const concessionBoost = p === "CHANGEOVER" ? 1.9 : p === "DOORS" || p === "OPENER" ? 1.15 : 0.55;
   const restroomBoost = p === "CHANGEOVER" ? 2.1 : p === "EGRESS" ? 1.25 : 0.7;
   const base = state.crowd.attendance * 0.065 + state.guestErrandLoad * 8;
-  const toConcessions = [{ x: 47, y: 54 }, { x: 45, y: 40 }, { x: 51, y: 16 }, { x: 81, y: 16 }, { x: 90, y: 27 }];
-  const toRestrooms = [{ x: 47, y: 54 }, { x: 55, y: 40 }, { x: 78, y: 40 }, { x: 88, y: 16 }];
-  const toMerch = [{ x: 40, y: 68 }, { x: 29, y: 68 }, { x: 28, y: 50 }, { x: 16, y: 50 }, { x: 15, y: 16 }];
-  const backToSeats = [{ x: 90, y: 27 }, { x: 80, y: 50 }, { x: 56, y: 68 }, { x: 46, y: 58 }];
   return [
-    buildFlowDots("guest-concession", base * concessionBoost, toConcessions, 24, 55, { action: "BUY", speed: 0.17, actionPortion: 0.35, vanishPortion: 0.08 }),
-    buildFlowDots("guest-restroom", base * restroomBoost, toRestrooms, 22, 58, { action: "REST", speed: 0.16, actionPortion: 0.38, vanishPortion: 0.08 }),
-    buildFlowDots("guest-merch", base * 0.55, toMerch, 12, 65, { action: "MERCH", speed: 0.13, actionPortion: 0.3, vanishPortion: 0.1 }),
-    buildFlowDots("guest-return", base * 0.85, backToSeats, 18, 70, { action: "BACK", speed: 0.15, actionPortion: 0.12, vanishPortion: 0.08 })
+    buildFlowDots("guest-concession actor-guest", base * concessionBoost * 0.52, ROUTES.public.concessionNorth, 13, 55, { action: "BUY", speed: 0.17, actionPortion: 0.38, vanishPortion: 0.1 }),
+    buildFlowDots("guest-concession actor-guest", base * concessionBoost * 0.48, ROUTES.public.concessionSouth, 13, 55, { action: "BUY", speed: 0.17, actionPortion: 0.38, vanishPortion: 0.1 }),
+    buildFlowDots("guest-restroom actor-guest", base * restroomBoost * 0.5, ROUTES.public.restroomNorth, 11, 58, { action: "REST", speed: 0.16, actionPortion: 0.4, vanishPortion: 0.1 }),
+    buildFlowDots("guest-restroom actor-guest", base * restroomBoost * 0.5, ROUTES.public.restroomSouth, 11, 58, { action: "REST", speed: 0.16, actionPortion: 0.4, vanishPortion: 0.1 }),
+    buildFlowDots("guest-merch actor-guest", base * 0.55, ROUTES.public.merch, 12, 65, { action: "MERCH", speed: 0.13, actionPortion: 0.34, vanishPortion: 0.1 }),
+    buildFlowDots("guest-return actor-guest", base * 0.42, ROUTES.public.returnNorth, 9, 70, { action: "BACK", speed: 0.15, actionPortion: 0.18, vanishPortion: 0.1 }),
+    buildFlowDots("guest-return actor-guest", base * 0.43, ROUTES.public.returnSouth, 9, 70, { action: "BACK", speed: 0.15, actionPortion: 0.18, vanishPortion: 0.1 })
   ].join("");
 }
 
 function buildBreakDots() {
   if (!state.breakActive) return "";
-  const toBreak = [{ x: 68, y: 55 }, { x: 79, y: 52 }, { x: 79, y: 10.8 }, { x: 49, y: 10.8 }, { x: 49, y: 6 }];
+  const toBreak = [{ x: 76, y: 50 }, { x: 89, y: 50 }, { x: 89, y: 12.5 }, { x: 45, y: 12.5 }, { x: 45, y: 6.9 }];
   const fromBreak = [...toBreak].reverse();
   if (state.breakStatus === "TO BREAK") {
     return buildFlowDots("break", 900, toBreak, 18, 35, { action: "BREAK", speed: 0.18, actionPortion: 0.12, vanishPortion: 0.05 });
   }
   if (state.breakStatus === "ON BREAK") {
-    return buildFlowDots("break", 1400, [{ x: 47, y: 6 }, { x: 52, y: 6 }, { x: 50, y: 8 }, { x: 47, y: 6 }], 24, 50, { action: "EAT", speed: 0.04, actionPortion: 0.75, vanishPortion: 0.02 });
+    return buildFlowDots("break", 1400, [{ x: 43, y: 6.8 }, { x: 48, y: 6.8 }, { x: 46, y: 9 }, { x: 43, y: 6.8 }], 24, 50, { action: "EAT", speed: 0.04, actionPortion: 0.75, vanishPortion: 0.02 });
   }
   if (state.breakStatus === "RETURNING") {
     return buildFlowDots("break", 900, fromBreak, 18, 35, { action: "BACK", speed: 0.18, actionPortion: 0.12, vanishPortion: 0.05 });
@@ -2137,20 +2788,144 @@ function serviceActivity() {
 
 function buildStaffDeploymentDots() {
   if (!state.crewDeployed) return "";
-  const entry = { x: 3, y: 23.5 };
-  const intake = { x: 10, y: 10.8 };
+  const entries = Object.entries(staff);
+  const totalCheckedIn = entries.reduce((sum, [, group]) => sum + group.checkedIn, 0);
+  let globalIndex = 0;
+  return entries.map(([team, group]) => {
+    const slug = groupSlug(team);
+    const route = staffEntryRoute(team);
+    const patrol = staffPatrolRoute(team);
+    return Array.from({ length: group.checkedIn }, (_, localIndex) => {
+      const personIndex = globalIndex++;
+      const intakeWave = personIndex / Math.max(1, totalCheckedIn) * 0.38;
+      const intakeT = clamp(state.staffIntake / 100 * 1.38 - intakeWave, 0, 1);
+      const onPost = intakeT >= 1;
+      const routePoint = onPost
+        ? pointOnPath(patrol, (state.simMinute * staffPatrolSpeed(team) + localIndex / Math.max(1, group.checkedIn)) % 1)
+        : pointOnPath(route, intakeT);
+      const cluster = onPost ? staffClusterOffset(personIndex, team) : { x: Math.sin(personIndex * 2.7) * 0.35, y: Math.cos(personIndex * 1.9) * 0.35 };
+      const action = !onPost ? "IN" : staffActionLabel(team);
+      const actionClass = !onPost || localIndex % 9 === 0 ? "action" : "";
+      return `<i class="mover staff staff-${slug} actor-worker ${actionClass}" data-action="${action}" style="left:${clamp(routePoint.x + cluster.x, 0.8, 98)}%;top:${clamp(routePoint.y + cluster.y, 1.2, 98)}%"></i>`;
+    }).join("");
+  }).join("");
+}
+
+function staffEntryRoute(team) {
+  const intake = ROUTES.staff.entryToIntake;
+  return {
+    Security: [...intake, { x: 55, y: 12.4 }, { x: 55, y: 6.9 }],
+    Ushers: [...intake, { x: 10.8, y: 52 }, { x: 17.8, y: 52 }, { x: 31, y: 50 }],
+    "Guest Services": [...intake, { x: 10.8, y: 40 }, { x: 10.8, y: 52 }, { x: 6.6, y: 52 }],
+    "Box Office": [...intake, { x: 10.8, y: 26 }, { x: 6.6, y: 26 }],
+    Medical: [...intake, { x: 64, y: 12.4 }, { x: 64, y: 6.9 }],
+    Custodial: [...intake, { x: 89, y: 12.4 }, { x: 89, y: 76 }, { x: 86, y: 76 }],
+    Production: [...intake, { x: 34.5, y: 12.4 }, { x: 34.5, y: 6.9 }, ...ROUTES.staff.topToStage.slice(1)],
+    Stagehands: [...intake, { x: 10.8, y: 82 }, ...ROUTES.staff.dockToStage.slice(1)],
+    Electricians: [...intake, { x: 89, y: 12.4 }, { x: 89, y: 52 }, { x: 94, y: 52 }],
+    IT: [...intake, { x: 89, y: 12.4 }, { x: 89, y: 25 }, { x: 88, y: 25 }],
+    Catering: [...intake, { x: 45, y: 12.4 }, { x: 45, y: 6.9 }]
+  }[team] || [...intake, { x: 10.8, y: 52 }];
+}
+
+function staffPatrolRoute(team) {
+  return {
+    Security: [{ x: 55, y: 6.9 }, { x: 55, y: 12.4 }, { x: 10.8, y: 12.4 }, { x: 10.8, y: 40 }, { x: 10.8, y: 52 }, { x: 17.8, y: 52 }, { x: 17.8, y: 76 }, { x: 10.8, y: 76 }, { x: 10.8, y: 40 }, { x: 55, y: 12.4 }, { x: 55, y: 6.9 }],
+    Ushers: [{ x: 31, y: 50 }, { x: 51, y: 36 }, { x: 63, y: 48 }, { x: 51, y: 63 }, { x: 35, y: 58 }, { x: 31, y: 50 }],
+    "Guest Services": [{ x: 6.6, y: 52 }, { x: 10.8, y: 52 }, { x: 10.8, y: 40 }, { x: 6.6, y: 40 }, { x: 6.6, y: 52 }],
+    "Box Office": [{ x: 6.6, y: 26 }, { x: 10.8, y: 26 }, { x: 10.8, y: 40 }, { x: 6.6, y: 40 }, { x: 6.6, y: 26 }],
+    Medical: [{ x: 64, y: 6.9 }, { x: 64, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 89, y: 50 }, { x: 89, y: 12.4 }, { x: 64, y: 12.4 }, { x: 64, y: 6.9 }],
+    Custodial: [{ x: 86, y: 76 }, { x: 51, y: 76 }, { x: 18, y: 76 }, { x: 10.8, y: 76 }, { x: 10.8, y: 52 }, { x: 17.8, y: 52 }, { x: 17.8, y: 76 }, { x: 86, y: 76 }],
+    Production: [{ x: 76, y: 50 }, { x: 82.4, y: 50 }, { x: 89, y: 50 }, { x: 89, y: 12.4 }, { x: 34.5, y: 12.4 }, { x: 34.5, y: 6.9 }, { x: 34.5, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 76, y: 50 }],
+    Stagehands: ROUTES.staff.dockToStage.concat(ROUTES.staff.stageToDock.slice(1)),
+    Electricians: [{ x: 94, y: 52 }, { x: 89, y: 52 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }, { x: 82.4, y: 50 }, { x: 89, y: 50 }, { x: 89, y: 52 }, { x: 94, y: 52 }],
+    IT: [{ x: 88, y: 25 }, { x: 89, y: 25 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 66, y: 50 }, { x: 49, y: 55 }, { x: 66, y: 50 }, { x: 89, y: 50 }, { x: 88, y: 25 }],
+    Catering: [{ x: 45, y: 6.9 }, { x: 45, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 89, y: 76 }, { x: 45, y: 12.4 }, { x: 45, y: 6.9 }]
+  }[team] || [{ x: 10.8, y: 52 }, { x: 17.8, y: 52 }, { x: 10.8, y: 52 }];
+}
+
+function staffPatrolSpeed(team) {
+  return team === "Security" ? 0.055 : team === "Stagehands" || team === "Production" ? 0.07 : 0.04;
+}
+
+function staffActionLabel(team) {
+  return {
+    Security: "SEC",
+    Ushers: "USH",
+    "Guest Services": "GSR",
+    "Box Office": "BOX",
+    Medical: "MED",
+    Custodial: "CUST",
+    Production: "PROD",
+    Stagehands: "HAND",
+    Electricians: "PWR",
+    IT: "IT",
+    Catering: "CAT"
+  }[team] || "STAFF";
+}
+
+function staffClusterOffset(index, team) {
+  const radius = team === "Stagehands" || team === "Production" ? 1.8 : 1.15;
+  return {
+    x: Math.sin(index * 2.27) * radius,
+    y: Math.cos(index * 1.73) * radius
+  };
+}
+
+function buildCloseoutStaffDots() {
+  const entries = [...Object.entries(staff), ["Band", { checkedIn: 7 }]];
+  const total = entries.reduce((sum, [, group]) => sum + group.checkedIn, 0);
+  let globalIndex = 0;
+  return entries.map(([team, group]) => {
+    const slug = team === "Band" ? "band" : groupSlug(team);
+    const route = staffExitRoute(team);
+    return Array.from({ length: group.checkedIn }, (_, localIndex) => {
+      const personIndex = globalIndex++;
+      const exitWave = personIndex / Math.max(1, total) * 0.34;
+      const exitT = clamp(state.closeoutProgress / 100 * 1.34 - exitWave, 0, 1);
+      if (exitT >= 1) return "";
+      const point = pointOnPath(route, exitT);
+      const cluster = { x: Math.sin(personIndex * 2.3) * 0.45, y: Math.cos(personIndex * 1.8) * 0.45 };
+      const klass = team === "Band" ? "band actor-worker action" : `staff staff-${slug} actor-worker action`;
+      const label = team === "Band" ? "BAND" : exitT > 0.82 ? "OUT" : staffActionLabel(team);
+      return `<i class="mover ${klass}" data-action="${label}" style="left:${clamp(point.x + cluster.x, 0.8, 98)}%;top:${clamp(point.y + cluster.y, 1.2, 98)}%"></i>`;
+    }).join("");
+  }).join("");
+}
+
+function staffExitRoute(team) {
+  const starts = {
+    Security: { x: 55, y: 6.9 },
+    Ushers: { x: 51, y: 50 },
+    "Guest Services": { x: 6.6, y: 52 },
+    "Box Office": { x: 6.6, y: 26 },
+    Medical: { x: 64, y: 6.9 },
+    Custodial: { x: 86, y: 76 },
+    Production: { x: 76, y: 50 },
+    Stagehands: { x: 52, y: 88.8 },
+    Electricians: { x: 94, y: 52 },
+    IT: { x: 88, y: 25 },
+    Catering: { x: 45, y: 6.9 },
+    Band: { x: 16, y: 6.9 }
+  };
+  return routeThroughHall(starts[team] || { x: 10.8, y: 52 }, { x: 1.2, y: 32.8 });
+}
+
+function buildCompressedStaffDeploymentDots() {
+  if (!state.crewDeployed) return "";
+  const intake = ROUTES.staff.entryToIntake;
   const routes = [
-    ["Security", "security", [{ x: entry.x, y: entry.y }, intake, { x: 59, y: 10.8 }, { x: 60, y: 5 }], "SEC"],
-    ["Ushers", "ushers", [{ x: entry.x, y: entry.y }, intake, { x: 38, y: 10.8 }, { x: 38, y: 39 }, { x: 48, y: 41 }], "USH"],
-    ["Guest Services", "guest-services", [{ x: entry.x, y: entry.y }, intake, { x: 18, y: 32 }, { x: 16, y: 48 }], "GSR"],
-    ["Box Office", "box-office", [{ x: entry.x, y: entry.y }, intake, { x: 8, y: 16 }], "BOX"],
-    ["Medical", "medical", [{ x: entry.x, y: entry.y }, intake, { x: 70, y: 10.8 }, { x: 70, y: 5 }], "MED"],
-    ["Custodial", "custodial", [{ x: entry.x, y: entry.y }, intake, { x: 50, y: 10.8 }, { x: 79, y: 52 }, { x: 80, y: 72 }], "CUST"],
-    ["Production", "production", [{ x: entry.x, y: entry.y }, intake, { x: 38, y: 6 }, { x: 79, y: 52 }, { x: 68, y: 54 }], "PROD"],
-    ["Stagehands", "stagehands", [{ x: entry.x, y: entry.y }, intake, { x: 20, y: 78 }, { x: 65, y: 78 }, { x: 67, y: 55 }], "HAND"],
-    ["Electricians", "electricians", [{ x: entry.x, y: entry.y }, intake, { x: 79, y: 52 }, { x: 91, y: 39 }], "PWR"],
-    ["IT", "it", [{ x: entry.x, y: entry.y }, intake, { x: 79, y: 10.8 }, { x: 94, y: 16 }], "IT"],
-    ["Catering", "catering", [{ x: entry.x, y: entry.y }, intake, { x: 49, y: 6 }], "CAT"]
+    ["Security", "security", [...intake, { x: 55, y: 12.4 }, { x: 55, y: 6.9 }], "SEC"],
+    ["Ushers", "ushers", [...intake, { x: 10.8, y: 52 }, { x: 17.8, y: 52 }, { x: 31, y: 50 }], "USH"],
+    ["Guest Services", "guest-services", [...intake, { x: 10.8, y: 40 }, { x: 10.8, y: 52 }, { x: 6.6, y: 52 }], "GSR"],
+    ["Box Office", "box-office", [...intake, { x: 10.8, y: 26 }, { x: 6.6, y: 26 }], "BOX"],
+    ["Medical", "medical", [...intake, { x: 64, y: 12.4 }, { x: 64, y: 6.9 }], "MED"],
+    ["Custodial", "custodial", [...intake, { x: 89, y: 12.4 }, { x: 89, y: 76 }, { x: 86, y: 76 }], "CUST"],
+    ["Production", "production", [...intake, { x: 34.5, y: 12.4 }, { x: 34.5, y: 6.9 }, { x: 34.5, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }], "PROD"],
+    ["Stagehands", "stagehands", [...intake, { x: 10.8, y: 82 }, { x: 52, y: 82 }, { x: 66, y: 82 }, { x: 89, y: 82 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }], "HAND"],
+    ["Electricians", "electricians", [...intake, { x: 89, y: 12.4 }, { x: 89, y: 52 }, { x: 94, y: 52 }], "PWR"],
+    ["IT", "it", [...intake, { x: 89, y: 12.4 }, { x: 89, y: 25 }, { x: 88, y: 25 }], "IT"],
+    ["Catering", "catering", [...intake, { x: 45, y: 12.4 }, { x: 45, y: 6.9 }], "CAT"]
   ];
   const intakeBoost = state.staffIntake < 100 ? 1.3 : 0.22;
   return routes.map(([team, slug, path, action]) => {
@@ -2168,25 +2943,25 @@ function buildCrewTaskDots() {
   if (!state.crewDeployed) return "";
   const activeTasks = state.crewTasks.filter((task) => task.status === "ACTIVE" || task.progress > 0 && task.progress < 100);
   const taskRoutes = {
-    "Warehouse Prep": ["production", [{ x: 37, y: 6 }, { x: 76, y: 6 }, { x: 78, y: 10.8 }, { x: 79, y: 52 }], "PREP"],
-    "Truck Load": ["stagehands", [{ x: 10, y: 91 }, { x: 10, y: 77 }, { x: 18, y: 78 }, { x: 20, y: 76 }], "LOAD"],
-    "Load-In Cases": ["stagehands", [{ x: 10, y: 77 }, { x: 20, y: 78 }, { x: 55, y: 78 }, { x: 68, y: 58 }], "PUSH"],
-    "Stage Build": ["stagehands", [{ x: 20, y: 78 }, { x: 55, y: 78 }, { x: 68, y: 58 }, { x: 68, y: 50 }], "BUILD"],
-    "Power Deployment": ["electricians", [{ x: 91, y: 39 }, { x: 84, y: 52 }, { x: 72, y: 58 }, { x: 67, y: 54 }], "PWR"],
-    "Rigging Prep": ["production", [{ x: 89, y: 6 }, { x: 79, y: 12 }, { x: 79, y: 52 }, { x: 68, y: 45 }], "RIG"],
-    "Lighting Hang/Cable": ["production", [{ x: 76, y: 6 }, { x: 79, y: 52 }, { x: 72, y: 68 }, { x: 67, y: 70 }], "LX"],
-    "PA + Stage Audio": ["production", [{ x: 76, y: 6 }, { x: 79, y: 52 }, { x: 68, y: 35 }, { x: 67, y: 30 }], "AUDIO"],
-    "Video Deployment": ["it", [{ x: 94, y: 16 }, { x: 79, y: 52 }, { x: 68, y: 54 }, { x: 46, y: 58 }], "VIDEO"],
-    "FOH + Network Build": ["it", [{ x: 94, y: 16 }, { x: 79, y: 52 }, { x: 46, y: 58 }, { x: 67, y: 54 }], "NET"],
-    "Patch + System Config": ["production", [{ x: 46, y: 58 }, { x: 55, y: 78 }, { x: 72, y: 58 }, { x: 67, y: 54 }], "PATCH"],
-    "Preset": ["ushers", [{ x: 60, y: 5 }, { x: 79, y: 52 }, { x: 55, y: 40 }, { x: 46, y: 58 }], "CLEAR"],
-    "Show Call": ["production", [{ x: 46, y: 58 }, { x: 67, y: 54 }, { x: 68, y: 35 }], "CUE"],
-    "Strike": ["stagehands", [{ x: 68, y: 58 }, { x: 55, y: 78 }, { x: 20, y: 78 }, { x: 10, y: 77 }], "STRIKE"],
-    "Truck Pack": ["stagehands", [{ x: 68, y: 58 }, { x: 55, y: 78 }, { x: 20, y: 78 }, { x: 10, y: 91 }], "PACK"],
-    "Venue Sweep": ["custodial", [{ x: 81, y: 72 }, { x: 51, y: 91 }, { x: 28, y: 50 }, { x: 16, y: 48 }], "SWEEP"]
+    "Warehouse Prep": ["production", ROUTES.staff.topToStage, "PREP"],
+    "Truck Load": ["stagehands", [{ x: 22, y: 89 }, { x: 34, y: 89 }, { x: 43.5, y: 89 }, { x: 52, y: 89 }], "LOAD"],
+    "Load-In Cases": ["stagehands", ROUTES.staff.dockToStage, "PUSH"],
+    "Stage Build": ["stagehands", [...ROUTES.staff.dockToStage, { x: 76, y: 39 }], "BUILD"],
+    "Power Deployment": ["electricians", [{ x: 94, y: 52 }, { x: 89, y: 52 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }], "PWR"],
+    "Rigging Prep": ["production", [{ x: 84, y: 6.9 }, { x: 84, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 42 }], "RIG"],
+    "Lighting Hang/Cable": ["production", [{ x: 74, y: 6.9 }, { x: 74, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 84, y: 63 }], "LX"],
+    "PA + Stage Audio": ["production", [{ x: 70, y: 6.9 }, { x: 70, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 84, y: 36 }], "AUDIO"],
+    "Video Deployment": ["it", [{ x: 88, y: 25 }, { x: 89, y: 25 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 66, y: 50 }, { x: 49, y: 55 }], "VIDEO"],
+    "FOH + Network Build": ["it", [{ x: 88, y: 25 }, { x: 89, y: 25 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 66, y: 50 }, { x: 49, y: 55 }], "NET"],
+    "Patch + System Config": ["production", [{ x: 49, y: 55 }, { x: 66, y: 50 }, { x: 82.4, y: 50 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }], "PATCH"],
+    "Preset": ["ushers", [{ x: 55, y: 6.9 }, { x: 55, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 86.4, y: 76 }, { x: 51, y: 76 }, { x: 51, y: 50 }], "CLEAR"],
+    "Show Call": ["production", [{ x: 49, y: 55 }, { x: 66, y: 50 }, { x: 82.4, y: 50 }, { x: 89, y: 50 }, { x: 84, y: 36 }], "CUE"],
+    "Strike": ["stagehands", ROUTES.staff.stageToDock, "STRIKE"],
+    "Truck Pack": ["stagehands", [...ROUTES.staff.stageToDock, { x: 43.5, y: 89 }, { x: 22, y: 89 }], "PACK"],
+    "Venue Sweep": ["custodial", [{ x: 86, y: 76 }, { x: 51, y: 76 }, { x: 18, y: 76 }, { x: 10.8, y: 76 }, { x: 10.8, y: 52 }], "SWEEP"]
   };
   return activeTasks.slice(0, 7).map((task) => {
-    const [slug, path, action] = taskRoutes[task.name] || ["production", [{ x: 12, y: 11 }, { x: 79, y: 52 }, { x: 67, y: 54 }], "WORK"];
+    const [slug, path, action] = taskRoutes[task.name] || ["production", ROUTES.staff.topToStage, "WORK"];
     const volume = 140 + task.progress * 3 + serviceActivity() * 0.12;
     return buildFlowDots(`staff staff-${slug}`, volume, path, 7, 42, {
       action,
@@ -2201,14 +2976,15 @@ function buildLoadInDots() {
   if (!state.crewDeployed) return "";
   const p = phase();
   if (!["LOAD-IN", "SETUP", "CHANGEOVER", "LOAD-OUT"].includes(p)) return "";
-  const truckPath = [{ x: 4, y: 95 }, { x: 11, y: 95 }, { x: 11, y: 83 }, { x: 10, y: 77 }];
-  const forkliftPath = p === "LOAD-OUT"
-    ? [{ x: 67, y: 55 }, { x: 72, y: 58 }, { x: 79, y: 60 }, { x: 55, y: 78 }, { x: 22, y: 78 }, { x: 10, y: 77 }]
-    : [{ x: 10, y: 77 }, { x: 22, y: 78 }, { x: 55, y: 78 }, { x: 78, y: 78 }, { x: 79, y: 60 }, { x: 72, y: 58 }, { x: 67, y: 55 }, { x: 72, y: 58 }, { x: 79, y: 60 }, { x: 55, y: 78 }, { x: 22, y: 78 }, { x: 10, y: 77 }];
+  const forkliftPath = p === "SETUP" || p === "CHANGEOVER" || p === "LOAD-OUT"
+    ? ROUTES.service.forkliftToStage
+    : ROUTES.service.forkliftToDock;
   const truckVolume = ["LOAD-IN", "LOAD-OUT"].includes(p) ? state.trucksArrived * 95 : state.trucksArrived * 24;
   const liftVolume = state.forkliftsActive * 135 + (p === "LOAD-IN" ? state.unloadProgress * 3 : p === "SETUP" ? state.setupProgress * 2 : p === "CHANGEOVER" ? state.production.changeoverProgress * 2 : state.strikeProgress * 3);
-  const trucks = buildFlowDots("truck", truckVolume, truckPath, 12, 38, { action: state.dockDoorsOpen ? "TRUCK" : "WAIT", speed: 0.07, actionPortion: 0.34 });
-  const forklifts = buildFlowDots("forklift", liftVolume, forkliftPath, 18, 32, { action: p === "LOAD-OUT" ? "PACK" : p === "CHANGEOVER" ? "SWAP" : p === "SETUP" ? "GEAR" : "UNLOAD", speed: 0.16, actionPortion: 0.26 });
+  const trucks = buildFlowDots("truck", truckVolume * 0.62, ROUTES.service.truckIn, 7, 38, { action: state.dockDoorsOpen ? "DOCK" : "WAIT", speed: 0.065, actionPortion: 0.34, vanishPortion: 0.06, jitter: 0.2 }) +
+    buildFlowDots("truck", truckVolume * 0.44, ROUTES.service.truckOut, 5, 38, { action: "ROAD", speed: 0.058, actionPortion: 0.12, vanishPortion: 0.08, jitter: 0.18 });
+  const forklifts = buildFlowDots("forklift", liftVolume * 0.62, forkliftPath, 10, 32, { action: p === "LOAD-OUT" ? "PACK" : p === "CHANGEOVER" ? "SWAP" : p === "SETUP" ? "GEAR" : "DROP", speed: 0.14, actionPortion: 0.34, vanishPortion: 0.08, jitter: 0.18 }) +
+    buildFlowDots("forklift", liftVolume * 0.46, [...forkliftPath].reverse(), 8, 32, { action: "PARK", speed: 0.13, actionPortion: 0.28, vanishPortion: 0.08, jitter: 0.14 });
   return buildDockParking() + trucks + forklifts;
 }
 
@@ -2216,13 +2992,13 @@ function buildDockParking() {
   const parkedTrucks = clamp(Math.round(state.trucksArrived / 3), 0, 5);
   const parkedForks = clamp(state.forkliftsActive, 0, 4);
   const trucks = Array.from({ length: parkedTrucks }, (_, i) => {
-    const x = 4.7 + i * 2.1;
-    const y = 73.3 + (i % 2) * 3.4;
+    const x = 39.5 + i * 4.2;
+    const y = 87.4 + (i % 2) * 2.6;
     return `<i class="mover truck parked action" data-action="PARK" style="left:${x}%;top:${y}%"></i>`;
   }).join("");
   const forklifts = Array.from({ length: parkedForks }, (_, i) => {
-    const x = 14.1 + (i % 2) * 1.2;
-    const y = 74.2 + Math.floor(i / 2) * 2.6;
+    const x = 73.1 + (i % 4) * 4.1;
+    const y = 88.6 + Math.floor(i / 4) * 2.2;
     return `<i class="mover forklift parked action" data-action="IDLE" style="left:${x}%;top:${y}%"></i>`;
   }).join("");
   return trucks + forklifts;
@@ -2230,18 +3006,19 @@ function buildDockParking() {
 
 function buildBandDots() {
   if (state.band.status === "OFFSITE") return "";
+  if (state.closingMode) return "";
   const paths = {
-    BANDING: [{ x: 18, y: 6 }, { x: 20, y: 8 }, { x: 16, y: 8 }, { x: 18, y: 6 }],
-    ARRIVING: [{ x: 16, y: 90 }, { x: 12, y: 84 }, { x: 11, y: 77 }, { x: 20, y: 78 }, { x: 45, y: 78 }, { x: 66, y: 58 }],
-    "BAND SETUP": [{ x: 12, y: 84 }, { x: 20, y: 78 }, { x: 55, y: 78 }, { x: 72, y: 58 }, { x: 67, y: 54 }],
-    "SOUND CHECK": [{ x: 52, y: 8 }, { x: 66, y: 10.8 }, { x: 79, y: 52 }, { x: 67, y: 54 }],
-    HOLDING: [{ x: 48, y: 8 }, { x: 42, y: 10.8 }, { x: 10, y: 6 }],
-    "STAGE READY": [{ x: 10, y: 6 }, { x: 42, y: 10.8 }, { x: 79, y: 52 }, { x: 67, y: 35 }],
-    "ON STAGE": [{ x: 67, y: 54 }, { x: 64, y: 50 }, { x: 67, y: 58 }, { x: 70, y: 54 }],
-    "OFF STAGE": [{ x: 67, y: 54 }, { x: 79, y: 52 }, { x: 54, y: 10.8 }, { x: 20, y: 6 }]
+    BANDING: [{ x: 15.8, y: 6.4 }, { x: 18.4, y: 7.9 }, { x: 14.1, y: 8.1 }, { x: 15.8, y: 6.4 }],
+    ARRIVING: [{ x: 22, y: 89 }, { x: 34, y: 89 }, { x: 36, y: 82 }, { x: 66, y: 82 }, { x: 89, y: 82 }, { x: 89, y: 50 }, { x: 76, y: 50 }],
+    "BAND SETUP": [{ x: 22, y: 89 }, { x: 34, y: 89 }, { x: 36, y: 82 }, { x: 66, y: 82 }, { x: 89, y: 82 }, { x: 89, y: 50 }, { x: 76, y: 50 }],
+    "SOUND CHECK": [{ x: 16, y: 6.9 }, { x: 16, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 82.4, y: 50 }, { x: 76, y: 50 }],
+    HOLDING: [{ x: 6.4, y: 6.8 }, { x: 8.4, y: 8.4 }, { x: 4.3, y: 8.4 }, { x: 6.4, y: 6.8 }],
+    "STAGE READY": [{ x: 6.4, y: 6.8 }, { x: 6.4, y: 12.4 }, { x: 89, y: 12.4 }, { x: 89, y: 50 }, { x: 84.7, y: 36.2 }],
+    "ON STAGE": [{ x: 76.2, y: 50 }, { x: 73.5, y: 42.2 }, { x: 79.2, y: 43.5 }, { x: 79.4, y: 58.2 }, { x: 73.9, y: 57.4 }, { x: 76.2, y: 50 }],
+    "OFF STAGE": [{ x: 76.2, y: 50 }, { x: 82.4, y: 50 }, { x: 89, y: 50 }, { x: 89, y: 12.4 }, { x: 16, y: 12.4 }, { x: 16, y: 6.9 }]
   };
   const action = state.band.status === "BANDING" ? "JAM" : state.band.status === "BAND SETUP" ? "BACKLINE" : state.band.status === "SOUND CHECK" ? "CHECK" : state.band.status === "HOLDING" ? "GREEN" : state.band.status === "ON STAGE" ? "PLAY" : "BAND";
-  return buildFlowDots("band", 700, paths[state.band.status] || paths.ARRIVING, 7, 90, { action, speed: state.band.status === "ON STAGE" ? 0.05 : 0.12, actionPortion: 0.38 });
+  return buildFlowDots("band", 700, paths[state.band.status] || paths.ARRIVING, 7, 90, { action, speed: state.band.status === "ON STAGE" ? 0.05 : 0.12, actionPortion: 0.46, vanishPortion: 0.12 });
 }
 
 function buildBadGuestDots() {
@@ -2253,7 +3030,7 @@ function buildBadGuestDots() {
     const exitPoint = roomCenter(exit);
     const securityStart = crewStartFor("Security");
     const responsePath = routeThroughHall(securityStart, sourcePoint);
-    const escortPath = routeThroughHall(sourcePoint, exitPoint);
+    const escortPath = routeGuestToExit(sourcePoint, exitPoint);
     if (guest.stage === "ACTING OUT") {
       return `<i class="mover bad-guest action" data-action="BAD" style="left:${sourcePoint.x + index}%;top:${sourcePoint.y + index}%"></i>`;
     }
@@ -2271,6 +3048,26 @@ function buildBadGuestDots() {
     }
     return "";
   }).join("");
+}
+
+function routeGuestToExit(source, exit) {
+  const eastExit = exit.x > 80;
+  const verticalX = eastExit ? 86.4 : 10.8;
+  const exitY = eastExit ? 88 : 88;
+  const upper = source.y < 50;
+  const ringY = upper ? 18.5 : 76;
+  const sourceToRing = source.x > 65
+    ? [{ x: 86.4, y: clamp(source.y, 18.5, 76) }, { x: 86.4, y: ringY }]
+    : source.x < 30
+      ? [{ x: 17.8, y: clamp(source.y, 18.5, 76) }, { x: 17.8, y: ringY }]
+      : [{ x: source.x, y: upper ? 31.8 : 68 }, { x: source.x, y: ringY }];
+  return [
+    source,
+    ...sourceToRing,
+    { x: verticalX, y: ringY },
+    { x: verticalX, y: exitY },
+    exit
+  ];
 }
 
 function buildWorkOrderDots() {
@@ -2304,6 +3101,9 @@ function supportRoomIdForOrder(order, incident) {
   if (title.includes("ahu") || category === "HVAC") return "hvacPlant";
   if (title.includes("panel") || title.includes("phase") || category === "Electrical") return "mainElectrical";
   if (title.includes("core") || title.includes("dante") || category === "Network") return "mdf";
+  if (title.includes("freshwater") || title.includes("fixtures")) return "hvacPlant";
+  if (title.includes("refrigeration")) return "catering";
+  if (title.includes("cleanliness") || title.includes("spill")) return "storage";
   if (title.includes("concessions")) return "catering";
   if (category === "Facility") return "storage";
   if (category === "Medical") return "medical";
@@ -2317,6 +3117,9 @@ function shortWorkOrderAction(order) {
   const category = incident?.category || "";
   if (order.status === "EN ROUTE") return "GO";
   if (order.status === "GETTING KIT") return "KIT";
+  if (title.includes("freshwater") || title.includes("fixtures")) return "WATER";
+  if (title.includes("refrigeration")) return "FRIDGE";
+  if (title.includes("cleanliness") || title.includes("spill")) return "CLEAN";
   if (title.includes("ahu") || category === "HVAC") return "VALVE";
   if (title.includes("panel") || title.includes("phase") || category === "Electrical") return "SHED";
   if (title.includes("concessions")) return "STOCK";
@@ -2328,13 +3131,15 @@ function shortWorkOrderAction(order) {
 }
 
 function crewStartFor(crew) {
-  if (crew === "IT") return { x: 94, y: 16 };
-  if (crew === "Electricians") return { x: 91, y: 39 };
-  if (crew === "Medical") return { x: 70, y: 5 };
-  if (crew === "Security") return { x: 60, y: 5 };
-  if (crew === "Stagehands" || crew === "Production") return { x: 38, y: 8 };
-  if (crew === "Custodial") return { x: 76, y: 8 };
-  return { x: 12, y: 52 };
+  if (crew === "IT") return { x: 88, y: 25 };
+  if (crew === "Electricians") return { x: 94, y: 52 };
+  if (crew === "Medical") return { x: 64.3, y: 6.9 };
+  if (crew === "Security") return { x: 55, y: 6.9 };
+  if (crew === "Stagehands") return { x: 52, y: 88.8 };
+  if (crew === "Production") return { x: 34.5, y: 6.9 };
+  if (crew === "Custodial") return { x: 74, y: 6.9 };
+  if (crew === "Catering") return { x: 45, y: 6.9 };
+  return { x: 10.8, y: 52 };
 }
 
 function roomCenter(room) {
@@ -2342,13 +3147,56 @@ function roomCenter(room) {
 }
 
 function routeThroughHall(start, end) {
-  const midY = end.y < 20 ? 10.8 : end.y > 72 ? 78 : 52;
-  return [
-    start,
-    { x: start.x < 20 ? 10 : 79, y: midY },
-    { x: end.x > 82 ? 84 : end.x < 20 ? 18 : end.x, y: midY },
-    end
-  ];
+  const path = [start];
+  const add = (point) => {
+    const last = path[path.length - 1];
+    if (!last || Math.abs(last.x - point.x) > 0.05 || Math.abs(last.y - point.y) > 0.05) path.push(point);
+  };
+  const destinationIsStageOrFloor = end.x >= 30 && end.x <= 83 && end.y >= 31 && end.y <= 69;
+  const destinationIsWestPublic = end.x < 30 && end.y >= 15 && end.y <= 80;
+  const destinationIsEastPublic = end.x >= 75 && end.y >= 15 && end.y <= 80;
+
+  if (start.y < 15) {
+    add({ x: start.x, y: 12.4 });
+    add({ x: 89, y: 12.4 });
+  } else if (start.y > 80) {
+    add({ x: start.x, y: 82 });
+    add({ x: 89, y: 82 });
+  } else if (start.x < 13) {
+    add({ x: 10.8, y: start.y });
+    add({ x: 10.8, y: 50 });
+  } else if (start.x >= 83) {
+    add({ x: 89, y: start.y });
+    add({ x: 89, y: 50 });
+  } else {
+    add({ x: 82.4, y: 50 });
+    add({ x: 89, y: 50 });
+  }
+
+  if (end.y < 15) {
+    add({ x: 89, y: 12.4 });
+    add({ x: end.x, y: 12.4 });
+  } else if (end.y > 80) {
+    add({ x: 89, y: 82 });
+    add({ x: end.x, y: 82 });
+  } else if (destinationIsWestPublic) {
+    add({ x: 89, y: 50 });
+    add({ x: 89, y: 76 });
+    add({ x: 17.8, y: 76 });
+    add({ x: 17.8, y: clamp(end.y, 18.5, 76) });
+  } else if (destinationIsEastPublic) {
+    add({ x: 89, y: 50 });
+    add({ x: 86.4, y: clamp(end.y, 18.5, 76) });
+  } else if (destinationIsStageOrFloor) {
+    add({ x: 89, y: 50 });
+    add({ x: 82.4, y: 50 });
+  } else {
+    add({ x: 89, y: clamp(end.y, 12.4, 82) });
+    add({ x: end.x > 89 ? 89 : end.x < 13 ? 10.8 : end.x, y: clamp(end.y, 12.4, 82) });
+  }
+
+  add(end);
+  return path;
 }
 
 function buildFlowDots(kind, volume, path, maxDots, divisor, options = {}) {
@@ -2363,10 +3211,11 @@ function buildFlowDots(kind, volume, path, maxDots, divisor, options = {}) {
     const acting = cycle > travelPortion;
     const travelT = acting ? 1 : cycle / travelPortion;
     const point = pointOnPath(path, travelT);
-    const wiggle = Math.sin((state.simMinute * 2.2) + i * 1.9) * 1.5;
-    const actionScatter = acting ? Math.sin(i * 3.1) * 1.4 : 0;
-    const x = clamp(point.x + Math.sin(i * 2.4) * 1.2 + actionScatter, 0.8, 98);
-    const y = clamp(point.y + (acting ? Math.cos(i * 2.2) * 1.1 : wiggle), 1.2, 98);
+    const jitter = options.jitter ?? 1;
+    const wiggle = Math.sin((state.simMinute * 2.2) + i * 1.9) * 1.5 * jitter;
+    const actionScatter = acting ? Math.sin(i * 3.1) * 1.4 * jitter : 0;
+    const x = clamp(point.x + Math.sin(i * 2.4) * 1.2 * jitter + actionScatter, 0.8, 98);
+    const y = clamp(point.y + (acting ? Math.cos(i * 2.2) * 1.1 * jitter : wiggle), 1.2, 98);
     const actionAttr = acting && options.action ? ` data-action="${options.action}"` : "";
     return `<i class="mover ${kind} ${acting ? "action" : ""}"${actionAttr} style="left:${x}%;top:${y}%"></i>`;
   }).join("");
@@ -2452,14 +3301,39 @@ function renderInspector() {
     stat("Power", `${runtime.power.toFixed(1)} kW`),
     stat("Network", runtime.network, runtime.network === "OK" ? "" : "warning"),
     stat("Equipment", room.equipment.join(", ")),
+    ...resourceStats(room, runtime),
     stat("Incidents", openRoomIncidents.length ? openRoomIncidents.map((item) => item.id).join(", ") : "None")
   ].join("");
 }
 
+function resourceStats(room, runtime) {
+  const res = runtime.resources;
+  const items = [];
+  if (res.cleanliness !== null) items.push(stat("Cleanliness", `${Math.round(res.cleanliness)}%`, res.cleanliness < 55 ? "warning" : ""));
+  if (res.satisfaction !== null) items.push(stat("Guest Satisfaction", `${Math.round(res.satisfaction)}%`, res.satisfaction < 65 ? "warning" : ""));
+  if (res.freshwater !== null) items.push(stat("Freshwater", `${Math.round(res.freshwater)}%`, res.freshwater < 30 ? "critical" : res.freshwater < 55 ? "warning" : ""));
+  if (res.wastewater !== null) items.push(stat("Wastewater", `${Math.round(res.wastewater)}%`, res.wastewater > 82 ? "warning" : ""));
+  if (res.fixtures !== null) items.push(stat("Fixtures Working", `${Math.round(res.fixtures)}%`, res.fixtures < 70 ? "warning" : ""));
+  if (res.refrigeration !== null) items.push(stat("Refrigeration", `${Math.round(res.refrigeration)}%`, res.refrigeration < 70 ? "warning" : ""));
+  if (res.casesWaiting !== null) items.push(stat("Cases Waiting", fmtNumber(res.casesWaiting), res.casesWaiting > 280 ? "warning" : ""));
+  if (res.dockAvailability !== null) items.push(stat("Dock Availability", `${Math.round(res.dockAvailability)}%`, res.dockAvailability < 35 ? "warning" : ""));
+  if (res.panelTemp !== null) items.push(stat("Panel Temp", `${Math.round(res.panelTemp)}°F`, res.panelTemp > 145 ? "warning" : ""));
+  if (res.treatmentSpaces !== null) items.push(stat("Treatment Spaces", `${Math.round(res.treatmentSpaces)} / 4`, res.treatmentSpaces < 2 ? "warning" : ""));
+  return items;
+}
+
 function roomRecommendation(room, runtime, density) {
+  const res = runtime.resources;
   if (density === "OVERCAPACITY") return "Dispatch crowd control and open adjacent doors";
   if (runtime.network !== "OK") return "Send IT and check redundant path";
   if (runtime.temp > 76) return "Increase cooling or reduce door-open time";
+  if (res.freshwater !== null && res.freshwater < 35) return "Send facility tech to restore water pressure";
+  if (res.fixtures !== null && res.fixtures < 70) return "Close bad fixtures and dispatch custodial/facility";
+  if (res.refrigeration !== null && res.refrigeration < 72) return "Check compressor power and move cold inventory";
+  if (res.cleanliness !== null && res.cleanliness < 58) return "Dispatch custodial with cart and reopen flow";
+  if (res.dockAvailability !== null && res.dockAvailability < 35) return "Hold inbound truck and clear forklift lane";
+  if (res.panelTemp !== null && res.panelTemp > 145) return "Thermal scan panel and shed noncritical load";
+  if (res.treatmentSpaces !== null && res.treatmentSpaces < 2) return "Dispatch medical support and clear treatment bay";
   if (room.id === "loadingDock" && state.crewDeployed && state.unloadProgress < 100) return state.dockDoorsOpen ? "Keep forklifts cycling to service road" : "Open dock doors";
   if (room.id === "securityLanes" && state.crowd.outsideQueue > 500) return "Open lane or reassign security";
   if (room.name.includes("Concessions") && concessions.waiting > 60) return "Open stand and add POS staff";
@@ -2489,7 +3363,7 @@ function renderCrowd() {
       <span class="microcopy">${densityText(value / cap)}</span>
     </div>`;
   }).join("");
-  const securityThroughput = state.securityLanes * 16 * staffingCoverage("Security") * (staff.Security.checkedIn / staff.Security.scheduled);
+  const securityThroughput = state.securityLanes * 16 * staffingCoverage("Security") * checkedInRatio("Security");
   const scanLimit = state.admissions.mode === "METERED" ? Math.min(140 * staffingCoverage("Box Office"), state.admissions.meteredMax) : state.admissions.mode === "OPEN" ? 140 * staffingCoverage("Box Office") : 0;
   const avgWait = state.totalWaitMinutes / Math.max(1, state.waitSamples);
   els.crowdRates.innerHTML = [
@@ -2519,7 +3393,7 @@ function renderSetup() {
 
 function setupPrediction() {
   const peakArrival = Math.round(112 * clamp(state.admissions.ticketsSold / capacity, 0.7, 1.25) * (state.scenario === "Overbooked" ? 1.45 : state.scenario === "Sold Out" ? 1.28 : 1));
-  const entryCapacity = Math.round(state.securityLanes * 16 * staffingCoverage("Security") * (staff.Security.checkedIn / staff.Security.scheduled));
+  const entryCapacity = Math.round(state.securityLanes * 16 * staffingCoverage("Security") * checkedInRatio("Security"));
   const recommendedSecurity = Math.ceil(peakArrival / 9.5);
   const projectedWait = peakArrival <= entryCapacity ? 7 : Math.min(90, Math.round((peakArrival - entryCapacity) / Math.max(1, entryCapacity) * 42 + 10));
   const waitLabel = projectedWait > 55 ? "CATASTROPHIC" : projectedWait > 28 ? `${projectedWait}m BAD` : `${projectedWait}m`;
@@ -2598,6 +3472,7 @@ function renderNpcWork() {
       ${stat("Crew Fatigue", `${Math.round(state.crewFatigue)}%`, state.crewFatigue > 72 ? "warning" : "")}
       ${stat("Break Status", state.breakStatus, state.breakActive ? "warning" : "")}
       ${stat("Staff Intake", `${Math.round(state.staffIntake)}%`)}
+      ${stat("Closeout", state.closingMode ? `${Math.round(state.closeoutProgress)}% clearing` : state.nextDayReady ? "Report ready" : "Not started", state.closingMode ? "warning" : "")}
       ${stat("Guest Problems", state.badGuests.filter((guest) => guest.stage !== "REMOVED").length, state.badGuests.some((guest) => guest.stage !== "REMOVED") ? "warning" : "")}
       ${stat("Active Fix Crews", activeOrders.length)}
       ${stat("Cases", `${state.unloadedCases} scanned`)}
@@ -2810,9 +3685,22 @@ function renderDispatch() {
 }
 
 function renderIncidents() {
-  const previousScroll = els.incidentPanel.querySelector(".incident-list")?.scrollTop || 0;
+  const now = performance.now();
+  const currentScroller = els.incidentPanel.querySelector(".incident-list");
+  if (currentScroller) incidentScrollTop = currentScroller.scrollTop;
   const open = incidents.filter((incident) => incident.status !== "RESOLVED");
   const history = incidents.filter((incident) => incident.status === "RESOLVED").slice(0, 6);
+  const signature = incidents.map((incident) => {
+    const order = state.workOrders.find((item) => item.incidentId === incident.id && item.status !== "DONE");
+    return `${incident.id}:${incident.status}:${incident.severity}:${incident.assigned}:${order?.status || "NONE"}`;
+  }).join("|");
+
+  if (now < incidentScrollLockedUntil && signature === incidentRenderSignature) {
+    updateIncidentProgressOnly();
+    return;
+  }
+
+  incidentRenderSignature = signature;
   els.incidentPanel.innerHTML = `<div class="incident-list">${open.map(renderIncidentCard).join("") || "<div class=\"stat-card\"><strong>No open incidents</strong><span class=\"microcopy\">Something will break soon enough.</span></div>"}</div>
     <div class="subgrid">
       ${stat("Incident History", `${incidents.length} total`)}
@@ -2821,17 +3709,30 @@ function renderIncidents() {
       <div class="stat-card"><span class="eyebrow">Resolved</span><strong>${history.length}</strong><span class="microcopy">${history.map((item) => item.id).join(", ") || "None"}</span></div>
     </div>`;
   const nextScroller = els.incidentPanel.querySelector(".incident-list");
-  if (nextScroller) nextScroller.scrollTop = previousScroll;
+  if (nextScroller) nextScroller.scrollTop = incidentScrollTop;
+}
+
+function updateIncidentProgressOnly() {
+  state.workOrders.filter((order) => order.status !== "DONE").forEach((order) => {
+    const card = els.incidentPanel.querySelector(`[data-incident-card="${order.incidentId}"]`);
+    if (!card) return;
+    const progress = card.querySelector("progress");
+    const percent = card.querySelector("[data-order-percent]");
+    const status = card.querySelector("[data-order-status]");
+    if (progress) progress.value = order.progress;
+    if (percent) percent.textContent = `${Math.round(order.progress)}%`;
+    if (status) status.textContent = `${workOrderAction(order)} · ${order.status}`;
+  });
 }
 
 function renderIncidentCard(incident) {
   const order = state.workOrders.find((item) => item.incidentId === incident.id && item.status !== "DONE");
-  return `<article class="incident-card">
+  return `<article class="incident-card" data-incident-card="${incident.id}">
     <div class="title-row"><strong>${incident.id} · ${incident.title}</strong><span class="pill ${incident.severity === "CRITICAL" ? "critical" : incident.severity === "WARNING" ? "warning" : ""}">${incident.severity}</span></div>
     <span class="microcopy">${incident.category} · ${incident.source} · ${incident.status} · assigned ${incident.assigned}</span>
     <p class="incident-detail">${incident.detail}</p>
     ${incident.steps?.length ? `<div class="step-strip">${incident.steps.map((step, index) => `<span class="${order && order.progress >= index / incident.steps.length * 100 ? "done" : ""}">${step}</span>`).join("")}</div>` : ""}
-    ${order ? `<div class="task-line"><label><span>${order.crew} response</span><span>${Math.round(order.progress)}%</span></label><progress max="100" value="${order.progress}"></progress><span class="microcopy">${workOrderAction(order)} · ${order.status}</span></div>` : ""}
+    ${order ? `<div class="task-line"><label><span>${order.crew} response</span><span data-order-percent>${Math.round(order.progress)}%</span></label><progress max="100" value="${order.progress}"></progress><span class="microcopy" data-order-status>${workOrderAction(order)} · ${order.status}</span></div>` : ""}
     <div class="runbook-grid">
       <div><b>Why</b><span>${incident.why}</span></div>
       <div><b>Impact</b><span>${incident.impact}</span></div>
@@ -2883,11 +3784,239 @@ function renderScore() {
   const score = calculateScore();
   els.scorePanel.innerHTML = `<div class="score-big">${score.total} / 100</div>` +
     ["guest", "safety", "production", "schedule", "finance"].map((key) => stat(labelForScore(key), `${Math.round(score[key])}`)).join("") +
+    (state.closingMode ? `<div class="report-box next-day-box">
+      <strong>Closeout In Progress</strong>
+      <p class="microcopy">Staff and band exiting through the staff route · ${Math.round(state.closeoutProgress)}% clear</p>
+      <progress max="100" value="${state.closeoutProgress}"></progress>
+    </div>` : "") +
     (state.reportGenerated ? `<div class="report-box">
       <strong>Fake Post-Event Report</strong>
       <p class="microcopy">${state.criticalCount} critical incidents · ${Math.max(0, currentDelayMinutes())}-minute doors/show delay · ${(state.uptimeMinutes / Math.max(1, state.uptimeMinutes + state.downtimeMinutes) * 100).toFixed(1)}% production uptime · average entry wait ${Math.round(state.totalWaitMinutes / Math.max(1, state.waitSamples))}m · peak attendance ${fmtNumber(state.peakAttendance)}</p>
+    </div>` : "") +
+    (state.nextDayReady ? `<div class="report-box next-day-box">
+      <strong>Next Event Day Ready</strong>
+      <p class="microcopy">Queued preset: ${state.nextDayScenario?.name || "Normal Concert"} · ${state.nextDayScenario?.note || "Balanced crowd, normal production."}</p>
+      <button type="button" data-start-next-day>Start Next Day</button>
     </div>` : "");
   els.scorePanel.scrollTop = previousScroll;
+}
+
+function renderDebugPanel() {
+  if (!els.debugPanel) return;
+  els.debugPanel.classList.toggle("hidden", !state.debugUnlocked);
+  els.debugUnlock?.classList.toggle("unlocked", state.debugUnlocked);
+  els.debugUnlock?.setAttribute("aria-pressed", state.debugUnlocked ? "true" : "false");
+  if (!state.debugUnlocked) return;
+  els.debugStatus.textContent = `DAY ${state.eventDay} · ${phase()} · ${state.speed}x`;
+  if (document.activeElement !== els.debugPhaseSelect) {
+    els.debugPhaseSelect.innerHTML = phaseNames.map((name, index) => (
+      `<option value="${index}" ${index === state.phaseIndex ? "selected" : ""}>${index + 1}. ${name}${index === phaseNames.length - 1 ? " (FINAL)" : ""}</option>`
+    )).join("");
+  }
+}
+
+function unlockDebugConsole() {
+  if (state.debugUnlocked) return;
+  state.debugUnlocked = true;
+  try {
+    localStorage.setItem("venueDebugUnlocked", "1");
+  } catch {
+    // Local files can run with storage disabled; the console still unlocks for this session.
+  }
+  addDispatch("CONTROL", "Debug console unlocked. Test bay controls are live.");
+  renderAll();
+}
+
+function forcePhase(targetIndex) {
+  const index = clamp(Number(targetIndex), 0, phaseNames.length - 1);
+  const previousPhase = phase();
+  if (index === phaseNames.length - 1) {
+    completePrerequisitesForPhase(index);
+    beginEventCloseout();
+    addDispatch("DEBUG", `Forced ${previousPhase} to final DARK closeout.`);
+    renderAll();
+    return;
+  }
+  state.closingMode = false;
+  state.nextDayReady = false;
+  state.phaseIndex = index;
+  state.simMinute = effectiveStart(index);
+  state.phaseActualStarts[index] ??= state.simMinute;
+  completePrerequisitesForPhase(index);
+  applyPhaseDefaults(index);
+  addDispatch("DEBUG", `Forced phase: ${previousPhase} to ${phase()}.`);
+  renderAll();
+}
+
+function completePrerequisitesForPhase(targetIndex) {
+  phaseNames.forEach((name, index) => {
+    if (index < targetIndex) markPhaseTasksComplete(name);
+  });
+  if (targetIndex > 1) {
+    state.crewDeployed = true;
+    state.staffIntake = 100;
+    state.dockDoorsOpen = true;
+    state.forkliftsActive = Math.max(2, state.forkliftsActive);
+    state.unloadProgress = 100;
+    state.unloadedCases = 740;
+  }
+  if (targetIndex > 2) {
+    state.setupProgress = 100;
+    state.band.instrumentLoad = 100;
+    state.band.arrivalProgress = 100;
+  }
+  if (targetIndex > 3) {
+    state.production.soundCheckProgress = 100;
+    state.band.soundcheck = 100;
+  }
+  if (targetIndex > 6) {
+    state.production.changeoverProgress = 100;
+  }
+}
+
+function applyPhaseDefaults(targetIndex) {
+  const p = phaseNames[targetIndex];
+  if (targetIndex === 0) {
+    state.speed = 0;
+    state.admissions.mode = "CLOSED";
+    state.band.status = "BANDING";
+    state.band.location = "Band Room";
+    return;
+  }
+  if (targetIndex >= 1) {
+    state.crewDeployed = true;
+    state.dockDoorsOpen = true;
+    state.forkliftsActive = Math.max(1, state.forkliftsActive);
+  }
+  if (["DOORS", "OPENER", "CHANGEOVER", "HEADLINER", "ENCORE"].includes(p)) {
+    state.admissions.mode = state.admissions.mode === "CLOSED" ? "OPEN" : state.admissions.mode;
+  }
+  if (["EGRESS", "LOAD-OUT"].includes(p)) {
+    state.admissions.mode = "CLOSED";
+  }
+  if (p === "SETUP") {
+    state.band.status = state.setupProgress >= 42 ? "ARRIVED" : "BANDING";
+    state.band.location = state.band.status === "BANDING" ? "Band Room" : "Dressing Rooms";
+  }
+  if (p === "SOUND CHECK") {
+    state.band.status = "SOUND CHECK";
+    state.band.location = "Stage";
+  }
+  if (p === "DOORS") {
+    state.band.status = "HOLDING";
+    state.band.location = "Green Room";
+  }
+  if (["OPENER", "HEADLINER", "ENCORE"].includes(p)) {
+    state.band.status = "SHOW";
+    state.band.location = "Stage";
+  }
+  if (p === "LOAD-OUT") {
+    state.forkliftsActive = Math.max(2, state.forkliftsActive);
+    state.dockDoorsOpen = true;
+  }
+}
+
+function markPhaseTasksComplete(targetPhase) {
+  state.crewTasks
+    .filter((task) => task.phase === targetPhase)
+    .forEach((task) => {
+      task.progress = 100;
+      task.status = "DONE";
+    });
+}
+
+function completeCurrentPhaseWork() {
+  const p = phase();
+  markPhaseTasksComplete(p);
+  if (p === "DARK" && state.phaseIndex === 0) {
+    sendCrewIn();
+    return;
+  }
+  if (p === "LOAD-IN") {
+    state.unloadProgress = 100;
+    state.unloadedCases = 740;
+    state.trucksArrived = Math.max(state.trucksArrived, 10);
+    state.dockDoorsOpen = true;
+    state.forkliftsActive = Math.max(2, state.forkliftsActive);
+  }
+  if (p === "SETUP") {
+    state.setupProgress = 100;
+    state.band.arrivalProgress = 100;
+    state.band.instrumentLoad = 100;
+    state.band.status = "HOLDING";
+    state.band.location = "Green Room";
+  }
+  if (p === "SOUND CHECK") {
+    state.production.soundCheckProgress = 100;
+    state.band.soundcheck = 100;
+    state.band.status = "HOLDING";
+    state.band.location = "Green Room";
+  }
+  if (p === "CHANGEOVER") {
+    state.production.changeoverProgress = 100;
+  }
+  if (p === "LOAD-OUT") {
+    state.strikeProgress = 100;
+    state.unloadedCases = 0;
+    beginEventCloseout();
+  }
+  addDispatch("DEBUG", `${p} work completed for testing.`);
+  renderAll();
+}
+
+function runDebugAction(action) {
+  if (!state.debugUnlocked) return;
+  if (action === "forcePhase") forcePhase(els.debugPhaseSelect.value);
+  if (action === "prevPhase") forcePhase(Math.max(0, state.phaseIndex - 1));
+  if (action === "nextPhase") forcePhase(Math.min(phaseNames.length - 1, state.phaseIndex + 1));
+  if (action === "completePhase") completeCurrentPhaseWork();
+  if (action === "closeout") {
+    markPhaseTasksComplete("LOAD-OUT");
+    state.strikeProgress = 100;
+    state.unloadedCases = 0;
+    beginEventCloseout();
+    addDispatch("DEBUG", "Closeout forced. Staff/band exit dots should run now.");
+    renderAll();
+  }
+  if (action === "finishCloseout") {
+    state.nextDayScenario ??= pickNextDayScenario();
+    finishEventCloseout();
+  }
+  if (action === "nextDay") {
+    state.nextDayScenario ??= pickNextDayScenario();
+    if (!state.reportGenerated) buildReport();
+    startNextEventDay();
+  }
+  if (action === "spawnIncident") {
+    maybeRandomIncident();
+    renderAll();
+  }
+  if (action === "spawnBadGuest") {
+    spawnBadGuest();
+    renderAll();
+  }
+  if (action === "addGuests") {
+    state.crowd.attendance = clamp(state.crowd.attendance + 500, 0, capacity);
+    state.crowd.seatsFloor = clamp(state.crowd.seatsFloor + 360, 0, capacity);
+    state.crowd.concourse = clamp(state.crowd.concourse + 140, 0, capacity);
+    state.admissions.inside = clamp(state.admissions.inside + 500, 0, capacity);
+    addDispatch("DEBUG", "Added 500 guests to public areas.");
+    renderAll();
+  }
+  if (action === "clearIncidents") {
+    incidents.forEach((incident) => {
+      incident.status = "RESOLVED";
+      incident.resolvedAt = formatSimTime(state.simMinute);
+    });
+    state.workOrders = [];
+    addDispatch("DEBUG", "All incidents resolved and active repair orders cleared.");
+    renderAll();
+  }
+  if (action === "speed60") {
+    state.speed = 60;
+    addDispatch("DEBUG", "Simulation speed forced to 60x.");
+    renderAll();
+  }
 }
 
 function labelForScore(key) {
@@ -2906,8 +4035,61 @@ function buildReport() {
   renderAll();
 }
 
+function captureDebugUnlock(event) {
+  const target = event.target;
+  const typing = target?.matches?.("input, textarea, select") || target?.isContentEditable;
+  if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (event.shiftKey && event.key.toLowerCase() === "d") {
+    unlockDebugConsole();
+    return;
+  }
+  const key = event.key.toLowerCase();
+  if (key.length !== 1 || !/[a-z0-9]/.test(key)) return;
+  debugUnlockBuffer = `${debugUnlockBuffer}${key}`.slice(-24);
+  if (debugUnlockBuffer.includes("deckit") || debugUnlockBuffer.includes("debug")) {
+    debugUnlockBuffer = "";
+    unlockDebugConsole();
+  }
+}
+
+function handleDebugUnlockClick() {
+  const now = performance.now();
+  debugUnlockClicks = now - debugUnlockClickAt > 1800 ? 1 : debugUnlockClicks + 1;
+  debugUnlockClickAt = now;
+  if (state.debugUnlocked || debugUnlockClicks >= 3) {
+    debugUnlockClicks = 0;
+    unlockDebugConsole();
+    return;
+  }
+  addDispatch("CONTROL", `OPS diagnostic latch ${debugUnlockClicks}/3.`);
+  renderDispatch();
+}
+
 function wireEvents() {
+  wireIncidentScrollGuard();
   document.addEventListener("click", (event) => {
+    const debugUnlock = event.target.closest("[data-debug-unlock]");
+    if (debugUnlock) {
+      handleDebugUnlockClick();
+      return;
+    }
+    const actorFilter = event.target.closest("[data-actor-filter]");
+    if (actorFilter) {
+      state.actorFilter = actorFilter.dataset.actorFilter;
+      renderMapActions();
+      renderVenueMap();
+      return;
+    }
+    const startNextDay = event.target.closest("[data-start-next-day]");
+    if (startNextDay) {
+      startNextEventDay();
+      return;
+    }
+    const debugAction = event.target.closest("[data-debug-action]");
+    if (debugAction) {
+      runDebugAction(debugAction.dataset.debugAction);
+      return;
+    }
     const speed = event.target.closest("[data-speed]");
   if (speed) {
       const requestedSpeed = Number(speed.dataset.speed);
@@ -3020,6 +4202,7 @@ function wireEvents() {
       renderAll();
     }
   });
+  document.addEventListener("keydown", captureDebugUnlock);
 
   els.advancePhase.addEventListener("click", () => advancePhase(true));
   els.delayDoors.addEventListener("click", () => {
@@ -3134,6 +4317,20 @@ function wireEvents() {
   });
 }
 
+function wireIncidentScrollGuard() {
+  const protect = () => {
+    const scroller = els.incidentPanel.querySelector(".incident-list");
+    if (scroller) incidentScrollTop = scroller.scrollTop;
+    incidentScrollLockedUntil = performance.now() + 1800;
+  };
+  ["wheel", "touchstart", "pointerdown", "mouseenter", "keydown"].forEach((type) => {
+    els.incidentPanel.addEventListener(type, protect, { passive: true });
+  });
+  els.incidentPanel.addEventListener("scroll", (event) => {
+    if (event.target.classList?.contains("incident-list")) protect();
+  }, true);
+}
+
 function sendCrewIn() {
   if (!state.crewDeployed) {
     state.crewDeployed = true;
@@ -3150,7 +4347,10 @@ function sendCrewIn() {
     addDispatch("DOCK", "Dock door 2 open. First truck moving to bay.");
     addDispatch("STAGE", "Stagehands walking service route to stage left and freight elevator.");
   } else {
-    addDispatch("CONTROL", "Crew is already on site and moving.");
+    state.staffIntake = 0;
+    state.actorFilter = "WORKERS";
+    state.speed = state.speed === 0 ? 20 : state.speed;
+    addDispatch("CONTROL", "Staff intake replay started. Worker-only map view enabled.");
   }
   renderAll();
 }
@@ -3178,13 +4378,13 @@ function animationLoop(now) {
   if (simDtMinutes > 0) updateSimulation(simDtMinutes);
   renderAccumulator += realDtSeconds;
   uiRenderAccumulator += realDtSeconds;
-  if (renderAccumulator > 0.08) {
+  if (renderAccumulator > 0.16) {
     renderAccumulator = 0;
     renderVenueMap();
   }
-  if (uiRenderAccumulator > 0.35) {
+  if (uiRenderAccumulator > 0.75) {
     uiRenderAccumulator = 0;
-    renderAll();
+    renderAll({ skipMap: true });
   }
   requestAnimationFrame(animationLoop);
 }

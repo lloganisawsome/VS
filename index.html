@@ -3,15 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Venue Simulator - Hard Mode</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>Venue Ops 8500 - Hard Mode</title>
+  <link rel="stylesheet" href="styles.css?v=logo-1">
 </head>
 <body>
   <main class="app-shell">
     <header class="command-bar">
       <div class="identity">
-        <span class="eyebrow">Indoor Venue Ops</span>
-        <h1>Venue Simulator <strong>Hard Mode</strong></h1>
+        <div class="brand-lockup">
+          <div class="venue-logo" aria-hidden="true">
+            <img src="assets/venue-ops-8500.svg" alt="">
+          </div>
+          <div>
+            <span class="eyebrow">Venue Ops 8500</span>
+            <h1>Venue Simulator <strong>Hard Mode</strong></h1>
+          </div>
+        </div>
       </div>
       <div class="clock-stack">
         <span class="eyebrow">Sim Time</span>
@@ -37,6 +44,35 @@
         <button id="advancePhase" type="button">Advance Phase</button>
         <button id="delayDoors" type="button">Delay Doors +5m</button>
         <button id="generateReport" type="button">Post-Event Report</button>
+        <button id="debugUnlock" class="stealth-debug-trigger" type="button" data-debug-unlock title="Click 3 times or type deckit">OPS</button>
+      </div>
+    </section>
+
+    <section id="debugPanel" class="debug-panel panel hidden" aria-label="Debug test menu">
+      <div class="debug-head">
+        <div>
+          <span class="eyebrow">Unlocked Test Bay</span>
+          <h2>Debug Console</h2>
+        </div>
+        <span id="debugStatus" class="pill">TYPE DECKIT</span>
+      </div>
+      <div class="debug-grid">
+        <label>
+          <span class="eyebrow">Force Phase</span>
+          <select id="debugPhaseSelect"></select>
+        </label>
+        <button type="button" data-debug-action="forcePhase">Jump</button>
+        <button type="button" data-debug-action="prevPhase">Prev</button>
+        <button type="button" data-debug-action="nextPhase">Next</button>
+        <button type="button" data-debug-action="completePhase">Complete Current Work</button>
+        <button type="button" data-debug-action="closeout">Start Closeout</button>
+        <button type="button" data-debug-action="finishCloseout">Finish Closeout</button>
+        <button type="button" data-debug-action="nextDay">Next Day</button>
+        <button type="button" data-debug-action="spawnIncident">Spawn Incident</button>
+        <button type="button" data-debug-action="spawnBadGuest">Spawn Bad Guest</button>
+        <button type="button" data-debug-action="addGuests">+500 Guests</button>
+        <button type="button" data-debug-action="clearIncidents">Clear Incidents</button>
+        <button type="button" data-debug-action="speed60">60x</button>
       </div>
     </section>
 
@@ -102,19 +138,28 @@
           <button id="callForklift" type="button">Call Forklift</button>
           <button id="crewBreak" type="button">Call Crew Break</button>
         </div>
+        <div class="actor-controls">
+          <span class="eyebrow">Map Actors</span>
+          <div id="actorFilterButtons" class="segmented small" aria-label="Map actor visibility"></div>
+        </div>
         <div class="venue-map" id="venueMap" aria-label="Selectable venue schematic"></div>
         <div class="legend">
           <span><i class="zone-chip arena"></i>Arena Bowl</span>
           <span><i class="zone-chip public"></i>Public</span>
           <span><i class="zone-chip boh"></i>Back of House</span>
           <span><i class="zone-chip ops"></i>Operations</span>
-          <span><i class="dot low"></i>Low</span>
-          <span><i class="dot moderate"></i>Moderate</span>
-          <span><i class="dot high"></i>High</span>
-          <span><i class="dot overcapacity"></i>Overcapacity</span>
+          <span><i class="dot guest"></i>Guest</span>
+          <span><i class="dot bad-guest"></i>Bad Guest</span>
           <span><i class="dot incident"></i>Incident</span>
           <span><i class="staff-chip staff-security"></i>Security</span>
+          <span><i class="staff-chip staff-ushers"></i>Ushers</span>
+          <span><i class="staff-chip staff-guest-services"></i>Guest Services</span>
+          <span><i class="staff-chip staff-box-office"></i>Box Office</span>
+          <span><i class="staff-chip staff-medical"></i>Medical</span>
+          <span><i class="staff-chip staff-custodial"></i>Custodial</span>
+          <span><i class="staff-chip staff-production"></i>Production</span>
           <span><i class="staff-chip staff-stagehands"></i>Stagehands</span>
+          <span><i class="staff-chip staff-electricians"></i>Electricians</span>
           <span><i class="staff-chip staff-it"></i>IT</span>
           <span><i class="staff-chip staff-catering"></i>Catering</span>
         </div>
@@ -308,6 +353,6 @@
     </section>
   </main>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=logo-1"></script>
 </body>
 </html>
