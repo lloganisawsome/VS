@@ -88,6 +88,7 @@ const speeds = [0, 1, 5, 20, 60];
 const admissionsModes = ["OPEN", "METERED", "PAUSED", "CLOSED"];
 const difficultyModes = ["SANDBOX", "HARD"];
 const actorFilters = ["ALL", "GUESTS", "WORKERS"];
+const actualShowPhases = ["OPENER", "HEADLINER", "ENCORE"];
 const staffRates = {
   Security: 31,
   Ushers: 24,
@@ -148,6 +149,7 @@ const state = {
   breakStatus: "WORKING",
   staffIntake: 0,
   guestErrandLoad: 0,
+  waterRepairCooldownUntil: 0,
   nextBadGuestId: 1,
   badGuests: [],
   parts: {
@@ -506,6 +508,14 @@ function formatSimTime(minute) {
 
 function phase() {
   return phaseNames[state.phaseIndex];
+}
+
+function isActualShowPhase() {
+  return actualShowPhases.includes(phase());
+}
+
+function waterRepairActive() {
+  return state.simMinute < state.waterRepairCooldownUntil;
 }
 
 function effectiveStart(index) {
@@ -998,10 +1008,12 @@ function applyMitigation(incident) {
   } else if (lower.includes("freshwater") || lower.includes("fixtures")) {
     rooms.filter((room) => room.name.includes("Restrooms") || room.name.includes("Concessions")).forEach((room) => {
       const res = roomRuntime.get(room.id).resources;
-      if (res.freshwater !== null) res.freshwater = Math.min(100, res.freshwater + 42);
-      if (res.fixtures !== null) res.fixtures = Math.min(100, res.fixtures + 35);
+      if (res.freshwater !== null) res.freshwater = 100;
+      if (res.wastewater !== null) res.wastewater = Math.min(res.wastewater, 34);
+      if (res.fixtures !== null) res.fixtures = 100;
     });
-    addDispatch("FACILITY", "Mitigation applied: water pressure valve opened and restroom fixtures restored.");
+    state.waterRepairCooldownUntil = Math.max(state.waterRepairCooldownUntil, state.simMinute + 90);
+    addDispatch("FACILITY", "Mitigation applied: water pressure valve opened, line flushed, and fixtures locked stable.");
   } else if (lower.includes("cleanliness") || lower.includes("spill")) {
     rooms.forEach((room) => {
       const res = roomRuntime.get(room.id).resources;
@@ -1497,8 +1509,12 @@ function updateRoomResources(dt) {
     }
     if (res.freshwater !== null) {
       const use = (room.name.includes("Restrooms") ? 0.055 : 0.032) * runtime.occupancy * dt / 18;
-      res.freshwater = clamp(res.freshwater - use + 0.04 * dt, 0, 100);
-      res.wastewater = clamp(res.wastewater + use * 0.9 - 0.03 * dt, 0, 100);
+      const repairActive = waterRepairActive();
+      const waterUse = repairActive ? use * 0.45 : use;
+      const pressureRecovery = repairActive ? 0.62 * dt : 0.04 * dt;
+      const wasteDrain = repairActive ? 0.18 * dt : 0.03 * dt;
+      res.freshwater = clamp(res.freshwater - waterUse + pressureRecovery, 0, 100);
+      res.wastewater = clamp(res.wastewater + waterUse * 0.9 - wasteDrain, 0, 100);
       if (res.fixtures !== null) {
         res.fixtures = clamp(100 - Math.max(0, 26 - res.freshwater) * 2 - Math.max(0, res.wastewater - 82) * 1.2, 0, 100);
       }
@@ -1525,7 +1541,13 @@ function updateRoomResources(dt) {
 }
 
 function roomResourceIncidents() {
-  const restroom = rooms.find((room) => room.name.includes("Restrooms") && roomRuntime.get(room.id).resources.freshwater < 28);
+  const activeWaterIncident = incidents.some((incident) => {
+    const lower = incident.title.toLowerCase();
+    return incident.status !== "RESOLVED" && (lower.includes("freshwater") || lower.includes("fixtures"));
+  });
+  const restroom = !waterRepairActive() && !activeWaterIncident
+    ? rooms.find((room) => room.name.includes("Restrooms") && roomRuntime.get(room.id).resources.freshwater < 28)
+    : null;
   if (restroom) {
     createIncident("Facility", "WARNING", "Restroom freshwater pressure dropping", restroom.name, [
       "Fixtures begin falling offline",
@@ -2229,6 +2251,7 @@ function startNextEventDay() {
   state.breakStatus = "WORKING";
   state.staffIntake = 0;
   state.guestErrandLoad = 0;
+  state.waterRepairCooldownUntil = 0;
   state.badGuests = [];
   state.workOrders = [];
   state.band = {
@@ -2829,6 +2852,10 @@ function staffEntryRoute(team) {
 }
 
 function staffPatrolRoute(team) {
+  if (isActualShowPhase()) {
+    const holdRoute = showModeStaffRoute(team);
+    if (holdRoute) return holdRoute;
+  }
   return {
     Security: [{ x: 55, y: 6.9 }, { x: 55, y: 12.4 }, { x: 10.8, y: 12.4 }, { x: 10.8, y: 40 }, { x: 10.8, y: 52 }, { x: 17.8, y: 52 }, { x: 17.8, y: 76 }, { x: 10.8, y: 76 }, { x: 10.8, y: 40 }, { x: 55, y: 12.4 }, { x: 55, y: 6.9 }],
     Ushers: [{ x: 31, y: 50 }, { x: 51, y: 36 }, { x: 63, y: 48 }, { x: 51, y: 63 }, { x: 35, y: 58 }, { x: 31, y: 50 }],
@@ -2844,11 +2871,43 @@ function staffPatrolRoute(team) {
   }[team] || [{ x: 10.8, y: 52 }, { x: 17.8, y: 52 }, { x: 10.8, y: 52 }];
 }
 
+function showModeStaffRoute(team) {
+  const breakRoom = [{ x: 41.4, y: 6.9 }, { x: 45.2, y: 6.9 }, { x: 46.8, y: 9.3 }, { x: 42.6, y: 9.1 }, { x: 41.4, y: 6.9 }];
+  const productionOffice = [{ x: 34.5, y: 6.9 }, { x: 38.6, y: 6.9 }, { x: 39.2, y: 9.4 }, { x: 34.5, y: 9.2 }, { x: 34.5, y: 6.9 }];
+  const stageStandby = [{ x: 82.4, y: 50 }, { x: 89, y: 50 }, { x: 89, y: 36.5 }, { x: 82.4, y: 36.5 }, { x: 82.4, y: 50 }];
+  const plantStandby = [{ x: 94, y: 52 }, { x: 92.8, y: 60 }, { x: 94.4, y: 68 }, { x: 96, y: 60 }, { x: 94, y: 52 }];
+  const mdfStandby = [{ x: 88, y: 25 }, { x: 90, y: 25 }, { x: 90, y: 31 }, { x: 88, y: 31 }, { x: 88, y: 25 }];
+  const storageStandby = [{ x: 74, y: 6.9 }, { x: 79, y: 6.9 }, { x: 79, y: 9.4 }, { x: 74, y: 9.4 }, { x: 74, y: 6.9 }];
+  const boxClosed = [{ x: 6.6, y: 26 }, { x: 9.5, y: 26 }, { x: 9.5, y: 31 }, { x: 6.6, y: 31 }, { x: 6.6, y: 26 }];
+  return {
+    Production: breakRoom,
+    Stagehands: phase() === "OPENER" ? stageStandby : breakRoom,
+    Electricians: plantStandby,
+    IT: mdfStandby,
+    Custodial: storageStandby,
+    Catering: breakRoom,
+    "Box Office": boxClosed
+  }[team] || null;
+}
+
 function staffPatrolSpeed(team) {
+  if (isActualShowPhase() && showModeStaffRoute(team)) return 0.018;
   return team === "Security" ? 0.055 : team === "Stagehands" || team === "Production" ? 0.07 : 0.04;
 }
 
 function staffActionLabel(team) {
+  if (isActualShowPhase()) {
+    const showLabels = {
+      Production: "BREAK",
+      Stagehands: phase() === "OPENER" ? "STBY" : "BREAK",
+      Electricians: "CALL",
+      IT: "MDF",
+      Custodial: "STBY",
+      Catering: "BREAK",
+      "Box Office": "CLOSED"
+    };
+    if (showLabels[team]) return showLabels[team];
+  }
   return {
     Security: "SEC",
     Ushers: "USH",
